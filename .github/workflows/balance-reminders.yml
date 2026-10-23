@@ -3,7 +3,14 @@ name: Khata Balance Reminders
 on:
   schedule:
     - cron: "30 3 7,14,21,28 * *"
+
   workflow_dispatch:
+    inputs:
+      diagnostic_mode:
+        description: "Run Firebase diagnostics without sending notifications"
+        required: true
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -34,4 +41,5 @@ jobs:
       - name: Run balance reminders
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          DIAGNOSTIC_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.diagnostic_mode && 'true' || 'false' }}
         run: node scripts/balance-reminders.js
