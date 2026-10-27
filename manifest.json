@@ -1,27 +1,21 @@
 {
-  "id": "/katha/",
-  "name": "Khata Management",
-  "short_name": "Khata",
-  "description": "Khata Management Admin App",
-  "start_url": "/katha/?source=pwa",
-  "scope": "/katha/",
+  "name": "My Katha",
+  "short_name": "My Katha",
+  "description": "Quick access. Better experience.",
+  "start_url": "/",
   "display": "standalone",
-  "orientation": "portrait",
   "background_color": "#ffffff",
-  "theme_color": "#16a34a",
-  "lang": "en",
+  "theme_color": "#059669",
   "icons": [
     {
       "src": "icon-192.png",
       "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any"
+      "type": "image/png"
     },
     {
       "src": "icon-512.png",
       "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any"
+      "type": "image/png"
     }
   ]
 }
