@@ -7,8 +7,9 @@
   "scope": "/katha/",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#0b1020",
+  "background_color": "#ffffff",
   "theme_color": "#16a34a",
+  "lang": "en",
   "icons": [
     {
       "src": "icon-192.png",
