@@ -1,9 +1,12 @@
 {
+  "id": "/katha/",
   "name": "My Katha",
   "short_name": "My Katha",
   "description": "Quick access. Better experience.",
-  "start_url": "/",
+  "start_url": "/katha/",
+  "scope": "/katha/",
   "display": "standalone",
+  "orientation": "portrait",
   "background_color": "#ffffff",
   "theme_color": "#059669",
   "icons": [
