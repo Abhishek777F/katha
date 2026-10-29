@@ -1,259 +1,150 @@
-"use strict";
+'use strict';
 
-const admin = require("firebase-admin");
+const admin = require('firebase-admin');
+const PROJECT_ID = 'katha-777';
+const TIME_ZONE = 'Asia/Kolkata';
+const REMINDER_DAYS = new Set([7, 14, 21, 28]);
+const APP_URL = 'https://abhishek777f.github.io/katha/#/reports';
+const STALE_RUNNING_MS = 30 * 60 * 1000;
 
-const PROJECT_ID = "katha-777";
-const INDIA_TIME_ZONE = "Asia/Kolkata";
-const SCHEDULED_DAYS = [7, 14, 21, 28];
-
-function fail(message) {
-  throw new Error(message);
+function istParts(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: TIME_ZONE, year: 'numeric', month: '2-digit', day: '2-digit'
+  }).formatToParts(date);
+  const out = Object.fromEntries(parts.map(p => [p.type, p.value]));
+  return { year: out.year, month: out.month, day: out.day, dateKey: `${out.year}-${out.month}-${out.day}` };
 }
-
-function getServiceAccount() {
+function parseServiceAccount() {
   const raw = process.env.FIREBASE_SERVICE_ACCOUNT;
-
-  if (!raw) {
-    fail("GitHub Secret FIREBASE_SERVICE_ACCOUNT is missing.");
-  }
-
-  let account;
-
-  try {
-    account = JSON.parse(raw);
-  } catch {
-    fail("FIREBASE_SERVICE_ACCOUNT is not valid JSON.");
-  }
-
-  if (
-    !account.project_id ||
-    !account.client_email ||
-    !account.private_key
-  ) {
-    fail("The service-account JSON is missing required fields.");
-  }
-
-  if (account.project_id !== PROJECT_ID) {
-    fail("The service account does not belong to katha-777.");
-  }
-
-  return account;
+  if (!raw) throw new Error('Missing GitHub secret FIREBASE_SERVICE_ACCOUNT.');
+  let sa;
+  try { sa = JSON.parse(raw); } catch (_) { throw new Error('FIREBASE_SERVICE_ACCOUNT is not valid JSON. Paste the complete service-account JSON as the GitHub Actions secret.'); }
+  if (sa.project_id !== PROJECT_ID) throw new Error(`Service account project_id must be ${PROJECT_ID}; received ${sa.project_id || '(missing)'}.`);
+  return sa;
 }
-
-function getIndiaDateParts() {
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: INDIA_TIME_ZONE,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit"
-  }).formatToParts(new Date());
-
-  const result = {};
-
-  for (const part of parts) {
-    if (part.type !== "literal") {
-      result[part.type] = part.value;
+function chunks(arr, size) {
+  const out = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
+}
+async function getActiveAdminTokens(db) {
+  const adminsSnap = await db.collection('admins').where('active', '==', true).get();
+  const tokens = new Map();
+  for (const adminDoc of adminsSnap.docs) {
+    const tokenSnap = await db.collection('adminPushTokens').doc(adminDoc.id).collection('tokens').get();
+    for (const tokenDoc of tokenSnap.docs) {
+      const token = tokenDoc.get('token');
+      if (typeof token === 'string' && token.trim()) {
+        // Keep a token's Firestore path so invalid tokens can be removed.
+        tokens.set(token, tokenDoc.ref);
+      }
     }
   }
-
-  return result;
+  return [...tokens.entries()].map(([token, ref]) => ({ token, ref }));
+}
+async function readOutstandingCustomers(db) {
+  const snap = await db.collection('customers').get();
+  return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+    .filter(c => c.deleted !== true)
+    .map(c => ({ ...c, totalPaise: Number(c.totalPaise) || 0, paidPaise: Number(c.paidPaise) || 0 }))
+    .filter(c => c.totalPaise - c.paidPaise > 0);
+}
+async function claimRun(db, dateKey) {
+  const ref = db.collection('reminderRuns').doc(dateKey);
+  return db.runTransaction(async tx => {
+    const snap = await tx.get(ref);
+    const old = snap.exists ? snap.data() : null;
+    if (old && old.status === 'sent') return { claimed: false, reason: 'already sent' };
+    if (old && old.status === 'running') {
+      const started = old.startedAt && typeof old.startedAt.toMillis === 'function' ? old.startedAt.toMillis() : 0;
+      if (started && Date.now() - started < STALE_RUNNING_MS) return { claimed: false, reason: 'another run is in progress' };
+    }
+    tx.set(ref, {
+      status: 'running', dateKey, startedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(), projectId: PROJECT_ID
+    }, { merge: true });
+    return { claimed: true, ref };
+  });
+}
+async function sendToTokens(messaging, tokenRows, customersCount, dateKey) {
+  let successCount = 0;
+  let failureCount = 0;
+  const invalidRefs = [];
+  const countText = `${customersCount} customer${customersCount === 1 ? '' : 's'} have an outstanding balance.`;
+  for (const batch of chunks(tokenRows, 500)) {
+    const response = await messaging.sendEachForMulticast({
+      tokens: batch.map(x => x.token),
+      notification: {
+        title: 'My Katha — Balance Reminder',
+        body: countText
+      },
+      data: {
+        type: 'balance_reminder',
+        date: dateKey,
+        customersCount: String(customersCount),
+        url: APP_URL
+      },
+      webpush: {
+        notification: { icon: 'https://abhishek777f.github.io/katha/icon-192.png', tag: `balance-reminder-${dateKey}`, renotify: false },
+        fcmOptions: { link: APP_URL }
+      }
+    });
+    successCount += response.successCount;
+    failureCount += response.failureCount;
+    response.responses.forEach((r, i) => {
+      if (!r.success && r.error && [
+        'messaging/registration-token-not-registered', 'messaging/invalid-registration-token'
+      ].includes(r.error.code)) invalidRefs.push(batch[i].ref);
+    });
+  }
+  await Promise.all(invalidRefs.map(ref => ref.delete().catch(() => {})));
+  return { successCount, failureCount, invalidCount: invalidRefs.length };
 }
 
 async function main() {
-  const diagnostic = process.env.DIAGNOSTIC_MODE === "true";
-  const serviceAccount = getServiceAccount();
-
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-    projectId: PROJECT_ID
-  });
-
+  const serviceAccount = parseServiceAccount();
+  if (!admin.apps.length) admin.initializeApp({ credential: admin.credential.cert(serviceAccount), projectId: PROJECT_ID });
   const db = admin.firestore();
   const messaging = admin.messaging();
+  const { dateKey, day } = istParts();
+  const diagnostic = String(process.env.DIAGNOSTIC_MODE || 'false').toLowerCase() === 'true';
 
-  const date = getIndiaDateParts();
-  const day = Number(date.day);
-  const dateKey = `${date.year}-${date.month}-${date.day}`;
+  const [customers, tokens] = await Promise.all([readOutstandingCustomers(db), getActiveAdminTokens(db)]);
+  const totalOutstandingPaise = customers.reduce((sum, c) => sum + (c.totalPaise - c.paidPaise), 0);
+  console.log(JSON.stringify({ mode: diagnostic ? 'diagnostic' : 'send', projectId: PROJECT_ID, dateKey, day: Number(day), outstandingCustomers: customers.length, totalOutstandingPaise, activeAdminTokens: tokens.length }, null, 2));
 
-  console.log("Khata Management balance reminder");
-  console.log("Project:", PROJECT_ID);
-  console.log("India date:", dateKey);
-  console.log("Mode:", diagnostic ? "DIAGNOSTIC — NO PUSH" : "SCHEDULED");
-
-  // Read customers without changing their records.
-  const customerSnapshot = await db.collection("customers")
-    .where("deleted", "==", false)
-    .get();
-
-  let outstandingCustomers = 0;
-  let totalOutstandingPaise = 0;
-  let recordsWithoutExpectedFields = 0;
-
-  for (const doc of customerSnapshot.docs) {
-    const data = doc.data();
-
-    if (
-      !Number.isSafeInteger(data.totalPaise) ||
-      !Number.isSafeInteger(data.paidPaise)
-    ) {
-      recordsWithoutExpectedFields++;
-      continue;
-    }
-
-    if (data.totalPaise > data.paidPaise) {
-      outstandingCustomers++;
-      totalOutstandingPaise += data.totalPaise - data.paidPaise;
-    }
-  }
-
-  // Find active admins and their registered device tokens.
-  const adminsSnapshot = await db.collection("admins")
-    .where("active", "==", true)
-    .get();
-
-  const tokens = new Set();
-
-  for (const adminDoc of adminsSnapshot.docs) {
-    const tokenSnapshot = await db
-      .collection("adminPushTokens")
-      .doc(adminDoc.id)
-      .collection("tokens")
-      .get();
-
-    for (const tokenDoc of tokenSnapshot.docs) {
-      const token = tokenDoc.get("token");
-
-      if (typeof token === "string" && token.length > 20) {
-        tokens.add(token);
-      }
-    }
-  }
-
-  console.log(JSON.stringify({
-    date: dateKey,
-    activeCustomers: customerSnapshot.size,
-    customersWithOutstandingBalances: outstandingCustomers,
-    totalOutstandingRupees: (totalOutstandingPaise / 100).toFixed(2),
-    recordsMissingExpectedBalanceFields: recordsWithoutExpectedFields,
-    activeAdmins: adminsSnapshot.size,
-    registeredDeviceTokens: tokens.size
-  }, null, 2));
-
-  // Diagnostic mode never sends a push or modifies Firestore.
   if (diagnostic) {
-    console.log("DIAGNOSTIC PASSED: Firebase reads succeeded.");
-    console.log("No notification was sent.");
+    console.log('Diagnostic mode: no notifications were sent and no reminder run was claimed.');
     return;
   }
-
-  if (!SCHEDULED_DAYS.includes(day)) {
-    console.log("No reminder is scheduled today.");
+  if (!REMINDER_DAYS.has(Number(day))) {
+    console.log(`Today is not a configured reminder day in ${TIME_ZONE}; no notification sent.`);
     return;
   }
-
-  if (outstandingCustomers === 0 || totalOutstandingPaise <= 0) {
-    console.log("No outstanding balances. No push was sent.");
+  if (customers.length === 0) {
+    console.log('No outstanding customer balances; no notification sent.');
     return;
   }
+  if (tokens.length === 0) throw new Error('No FCM tokens found for active admins. Open My Katha > Settings and enable push notifications on at least one admin device.');
 
-  if (tokens.size === 0) {
-    fail("No registered admin device tokens were found.");
-  }
-
-  // Avoid duplicate scheduled sends for this date.
-  const runRef = db.collection("reminderRuns").doc(dateKey);
-
-  const claim = await db.runTransaction(async transaction => {
-    const snapshot = await transaction.get(runRef);
-
-    if (
-      snapshot.exists &&
-      ["sent", "running"].includes(snapshot.get("status"))
-    ) {
-      return false;
-    }
-
-    transaction.set(runRef, {
-      status: "running",
-      startedAt: admin.firestore.FieldValue.serverTimestamp(),
-      scheduleDate: dateKey,
-      timezone: INDIA_TIME_ZONE
-    });
-
-    return true;
-  });
-
-  if (!claim) {
-    console.log("A reminder run already exists for this date.");
+  const claim = await claimRun(db, dateKey);
+  if (!claim.claimed) {
+    console.log(`Skipped reminder run: ${claim.reason}.`);
     return;
   }
-
-  let successCount = 0;
-  let failureCount = 0;
-
   try {
-    for (const token of tokens) {
-      try {
-        await messaging.send({
-          token,
-          notification: {
-            title: "Khata Management — Balance Reminder",
-            body: `${outstandingCustomers} customer(s) have outstanding balances. Open Khata Management to review them.`
-          },
-          data: {
-            type: "balance_reminder",
-            date: dateKey,
-            url: "https://abhishek777f.github.io/katha/#/reports"
-          },
-          webpush: {
-            fcmOptions: {
-              link: "https://abhishek777f.github.io/katha/#/reports"
-            }
-          }
-        });
-
-        successCount++;
-      } catch (error) {
-        failureCount++;
-        console.error(
-          "Push failed:",
-          error && error.code ? error.code : "unknown error"
-        );
-      }
-    }
-
-    await runRef.set({
-      status: successCount > 0 ? "sent" : "failed",
-      result: "push_attempted",
-      outstandingCustomers,
-      totalOutstandingPaise,
-      registeredDevices: tokens.size,
-      successfulDevices: successCount,
-      failedDevices: failureCount,
-      completedAt: admin.firestore.FieldValue.serverTimestamp()
+    const result = await sendToTokens(messaging, tokens, customers.length, dateKey);
+    if (result.successCount < 1) throw new Error(`FCM failed for all tokens (${result.failureCount} failures).`);
+    await claim.ref.set({
+      status: 'sent', sentAt: admin.firestore.FieldValue.serverTimestamp(),
+      customerCount: customers.length, totalOutstandingPaise,
+      tokenCount: tokens.length, successCount: result.successCount,
+      failureCount: result.failureCount, invalidTokenCount: result.invalidCount
     }, { merge: true });
-
-    console.log(JSON.stringify({
-      registeredDevices: tokens.size,
-      successfulDevices: successCount,
-      failedDevices: failureCount
-    }, null, 2));
-
-    if (successCount === 0) {
-      fail("Firebase did not accept any push notifications.");
-    }
+    console.log(JSON.stringify({ result: 'sent', ...result, dateKey }, null, 2));
   } catch (error) {
-    await runRef.set({
-      status: "failed",
-      error: String(error.message || error).slice(0, 500),
-      completedAt: admin.firestore.FieldValue.serverTimestamp()
-    }, { merge: true });
-
+    await claim.ref.set({ status: 'failed', failedAt: admin.firestore.FieldValue.serverTimestamp(), error: String(error.message || error) }, { merge: true });
     throw error;
   }
 }
-
-main().catch(error => {
-  console.error("Balance reminder job failed:", error.message || error);
-  process.exitCode = 1;
-});
+main().catch(error => { console.error(error.stack || error); process.exitCode = 1; });
