@@ -2,12 +2,12 @@ name: Khata Balance Reminders
 
 on:
   schedule:
-    - cron: "30 3 7,14,21,28 * *"
-
+    # 03:30 UTC = 09:00 Asia/Kolkata on the 7th, 14th, 21st and 28th.
+    - cron: '30 3 7,14,21,28 * *'
   workflow_dispatch:
     inputs:
       diagnostic_mode:
-        description: "Run Firebase diagnostics without sending notifications"
+        description: 'Run diagnostics only (does not send notifications)'
         required: true
         type: boolean
         default: true
@@ -15,31 +15,28 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: khata-balance-reminders-${{ github.event_name }}-${{ github.run_id }}
+  cancel-in-progress: false
+
 jobs:
   send-balance-reminders:
     runs-on: ubuntu-latest
-
+    timeout-minutes: 10
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
-
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
-
-      - name: Install dependencies
-        run: npm install firebase-admin
-
+          node-version: '20'
+      - name: Install Firebase Admin SDK
+        run: npm install --no-save firebase-admin@^13
       - name: Check reminder script
-        run: |
-          if [ ! -f scripts/balance-reminders.js ]; then
-            echo "Reminder script has not been created yet."
-            exit 1
-          fi
-
+        run: test -f scripts/balance-reminders.js
       - name: Run balance reminders
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           DIAGNOSTIC_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.diagnostic_mode && 'true' || 'false' }}
         run: node scripts/balance-reminders.js
+        
