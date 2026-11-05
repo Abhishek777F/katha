@@ -31,6 +31,9 @@ jobs:
       - name: Check custom-message sender
         run: test -f scripts/customer-custom-messages.js
 
+      - name: Check sender JavaScript syntax
+        run: node --check scripts/customer-custom-messages.js
+
       - name: Send pending customer messages
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
