@@ -1852,38 +1852,6 @@ function customerSheet(id) {
   });
 }
 ACT.editCustomer = b => go("editcustomer/" + b.dataset.id);
-ACT.sendCustomMessage = button => {
-  const id = button.dataset.id;
-  const customer = cust(id);
-  if (!customer || customer.deleted) return toast("This customer is not available.", "bad");
-
-  openSheet("Send custom message", `
-    <div class="card" style="margin-bottom:12px">
-      <div class="mu sm">Send only to</div>
-      <b>${esc(customer.name)}</b>
-      <div class="mu sm">${esc(id)} · ${esc(phoneFmt(customer.mobile))}</div>
-    </div>
-    <div id="customMessageError" class="msg hide" role="alert"></div>
-    <label class="fld"><span>Message title *</span><input id="customMessageTitle" maxlength="80" autocomplete="off" placeholder="Enter message title"></label>
-    <label class="fld"><span>Message *</span><textarea id="customMessageBody" maxlength="1000" rows="5" placeholder="Write your message"></textarea></label>
-    <p class="mu sm">The message is queued for this customer My Katha devices.</p>
-    <button class="btn pri block" id="sendCustomMessageConfirm">${ic("send")} Send message</button>
-  `, root => {
-    const error = $("#customMessageError", root);
-    $("#sendCustomMessageConfirm", root).onclick = event => lock(event.currentTarget, async () => {
-      const title = $("#customMessageTitle", root).value.trim();
-      const body = $("#customMessageBody", root).value.trim();
-      if (!title || !body) { error.textContent = "Enter both a title and a message."; error.classList.remove("hide"); return; }
-      try {
-        requireOnline();
-        const messageRef = doc(collection(db, "customerNotifications"));
-        await setDoc(messageRef, { customerId: id, customerName: customer.name, title, body, senderName: adminName(), type: "custom_message", status: "pending", read: false, readAt: null, createdAt: serverTimestamp(), createdBy: S.user.uid, createdByEmail: S.user.email || "" });
-        closeSheet();
-        toast("Message queued for " + customer.name, "ok");
-      } catch (e) { error.textContent = friendly(e); error.classList.remove("hide"); }
-    });
-  });
-};
 /* full-page add / edit customer */
 ROUTES.addcustomer = { data: true, back: true, parent: () => "customers", title: "Add customer", nav: "customers", render: () => customerPage(null) };
 ROUTES.editcustomer = { data: true, back: true, parent: r => "customer/" + r.arg, title: "Edit customer", nav: "customers", render: r => customerPage(r.arg) };
@@ -1981,7 +1949,6 @@ function paintCustomer() {
       <div class="half"><div class="circ">${ic("location_on", 1)}</div><div><b>${esc(c.address || "No address")}</b><small>Location</small></div></div></div>
     ${c.notes ? `<p class="mu sm" style="margin-top:10px">${esc(c.notes)}</p>` : ""}
     ${c.deleted ? "" : `<a class="cdc-wa ${n ? "" : "off"}" ${n ? `target="_blank" rel="noopener" href="https://wa.me/91${n}?text=${encodeURIComponent(waText(c))}"` : ""} aria-label="Chat on WhatsApp">${WA}<span>Chat on WhatsApp</span><span class="ms chev">chevron_right</span></a>`}</div>
-    ${c.deleted ? "" : `<button class="btn pri block" style="margin-top:10px" data-act="sendCustomMessage" data-id="${esc(id)}">${ic("send")} Send custom message</button>`}
   <div class="grid" style="margin-top:12px">
     <div class="stat" style="text-align:center"><div class="k">Total amount</div><div class="v">${inr(cTotal(c))}</div></div>
     <div class="stat" style="text-align:center"><div class="k">Total paid</div><div class="v pos">${inr(cPaid(c))}</div></div>
