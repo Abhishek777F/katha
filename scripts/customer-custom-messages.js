@@ -4,7 +4,10 @@ const admin = require('firebase-admin');
 
 const PROJECT_ID = 'katha-777';
 const COLLECTION = 'customerNotifications';
-const BATCH_LIMIT = 50;
+const BATCH_LIMIT = 20;
+const PROCESS_CONCURRENCY = 5;
+const MAX_RUN_MS = 4 * 60 * 1000;
+const CURSOR_COLLECTION = 'customerNotificationWorkerState';
 const STALE_SENDING_MS = 15 * 60 * 1000;
 const TOKEN_COLLECTION = 'customerPushTokens';
 
@@ -198,26 +201,86 @@ async function main() {
   }
   const db = admin.firestore();
   const messaging = admin.messaging();
+  const stateRef = db.collection(CURSOR_COLLECTION).doc('customMessages');
+  const stateSnap = await stateRef.get();
+  let lastDocumentId = stateSnap.exists ? stateSnap.get('lastDocumentId') : null;
+  let cursorSnapshot = null;
 
-  const snapshot = await db.collection(COLLECTION)
-    .where('status', 'in', ['pending', 'sending'])
-    .limit(BATCH_LIMIT)
-    .get();
+  // Resume after the last fully processed group from the previous run.
+  // The cursor document can already be "sent"; it is used only as a position.
+  if (typeof lastDocumentId === 'string' && lastDocumentId) {
+    const savedCursor = await db.collection(COLLECTION).doc(lastDocumentId).get();
+    if (savedCursor.exists) {
+      cursorSnapshot = savedCursor;
+    } else {
+      lastDocumentId = null;
+      await stateRef.set({
+        lastDocumentId: admin.firestore.FieldValue.delete(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+    }
+  }
 
+  const startedAt = Date.now();
+  let scanned = 0;
   let processed = 0;
-  for (const docSnap of snapshot.docs) {
-    await processOne(db, messaging, docSnap);
-    processed++;
+  let cycleCompleted = false;
+  let timeBudgetReached = false;
+
+  while (Date.now() - startedAt < MAX_RUN_MS) {
+    let query = db.collection(COLLECTION)
+      .where('status', 'in', ['pending', 'sending'])
+      .limit(BATCH_LIMIT);
+
+    if (cursorSnapshot) query = query.startAfter(cursorSnapshot);
+
+    const snapshot = await query.get();
+    if (snapshot.empty) {
+      // We reached the end of the queue. The next scheduled run starts at
+      // the beginning, so messages created behind the cursor are not lost.
+      await stateRef.set({
+        lastDocumentId: admin.firestore.FieldValue.delete(),
+        cycleCompletedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+      cycleCompleted = true;
+      break;
+    }
+
+    scanned += snapshot.size;
+    for (let i = 0; i < snapshot.docs.length; i += PROCESS_CONCURRENCY) {
+      const group = snapshot.docs.slice(i, i + PROCESS_CONCURRENCY);
+      await Promise.all(group.map(docSnap => processOne(db, messaging, docSnap)));
+      processed += group.length;
+
+      // Persist the cursor only after this group has finished. If a run stops
+      // unexpectedly, the next run resumes safely from the previous group.
+      const lastDoc = group[group.length - 1];
+      await stateRef.set({
+        lastDocumentId: lastDoc.id,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+      cursorSnapshot = lastDoc;
+
+      if (Date.now() - startedAt >= MAX_RUN_MS) {
+        timeBudgetReached = true;
+        break;
+      }
+    }
+
+    if (timeBudgetReached) break;
   }
 
   console.log(JSON.stringify({
     projectId: PROJECT_ID,
-    scanned: snapshot.size,
+    scanned,
     processed,
-    note: 'FCM acceptance confirms provider acceptance, not that a phone displayed the notification.'
+    cycleCompleted,
+    timeBudgetReached,
+    nextCursor: cursorSnapshot ? cursorSnapshot.id : null,
+    note: 'The worker resumes from its saved cursor on the next run. FCM acceptance confirms provider acceptance, not that a phone displayed the notification.'
   }, null, 2));
 }
-
 main().catch(error => {
   console.error(error.stack || error);
   process.exitCode = 1;
