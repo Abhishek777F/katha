@@ -1,0 +1,37 @@
+name: My Katha Customer Custom Messages
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: my-katha-customer-custom-messages
+  cancel-in-progress: false
+
+jobs:
+  send-customer-custom-messages:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Firebase Admin SDK
+        run: npm install --no-save firebase-admin@^13
+
+      - name: Check custom-message sender
+        run: test -f scripts/customer-custom-messages.js
+
+      - name: Send pending customer messages
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: node scripts/customer-custom-messages.js
