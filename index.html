@@ -1321,6 +1321,29 @@ function toast(msg, type = "") {
   const t = document.createElement("div"); t.className = "toast " + type; t.textContent = msg;
   $("#toasts").appendChild(t); setTimeout(() => t.remove(), type === "bad" ? 6000 : 3000);
 }
+const MY_KATHA_NOTIFICATION_WORKER_URL = "https://my-katha-notifications.abhi8310815429gxhfjgig.workers.dev/";
+
+async function dispatchCustomerNotification(notificationId) {
+  if (!S.user || typeof S.user.getIdToken !== "function") {
+    throw new Error("Admin session is not available.");
+  }
+  const idToken = await S.user.getIdToken();
+  const result = await fetch(MY_KATHA_NOTIFICATION_WORKER_URL, {
+    method: "POST",
+    headers: {
+      "Authorization": "Bearer " + idToken,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ notificationId })
+  });
+  let data = {};
+  try { data = await result.json(); } catch (_) {}
+  if (!result.ok || !data.success) {
+    throw new Error(data.error || data.status || ("Worker request failed (" + result.status + ")."));
+  }
+  return data;
+}
+
 function requireOnline() {
   if (!navigator.onLine) throw new UserError("You are offline. Nothing was saved. Money entries are saved only when connected to Firebase – reconnect and try again.");
 }
@@ -2336,8 +2359,18 @@ ACT.sendCustomerMessage = b => lock(b, async () => {
   if (!title || title.length > 80) throw new UserError("Enter a title of 1–80 characters.");
   if (!body || body.length > 1000) throw new UserError("Enter a message of 1–1000 characters.");
   if (!await askDlg({ title: "Send this message?", msg: `Only <b>${esc(c.name)}</b> (${esc(c.id)}) will receive this.<br><br><b>${esc(title)}</b><br>${esc(body).replace(/\n/g, "<br>")}<br><br>Sender: <b>Abhi</b>`, ok: "Confirm and send" })) return;
-  await setDoc(doc(collection(db, "customerNotifications")), { customerId: c.id, customerName: c.name, title, body, senderName: "Abhi", type: "custom_message", status: "pending", read: false, createdAt: serverTimestamp(), createdBy: S.user.uid, createdByEmail: S.user.email || "" });
-  toast("Message queued for " + c.name, "ok"); $("#cmTitle").value = ""; $("#cmBody").value = ""; CM.selectedId = ""; CM.search = ""; $("#cmSearch").value = ""; paintCmCustomers(); paintCmSelected();
+  const notificationRef = doc(collection(db, "customerNotifications"));
+  await setDoc(notificationRef, { customerId: c.id, customerName: c.name, title, body, senderName: "Abhi", type: "custom_message", status: "pending", read: false, createdAt: serverTimestamp(), createdBy: S.user.uid, createdByEmail: S.user.email || "" });
+  let sentImmediately = false;
+  try {
+    await dispatchCustomerNotification(notificationRef.id);
+    sentImmediately = true;
+  } catch (error) {
+    // Leave the Firestore record pending so the existing GitHub workflow can retry it.
+    console.warn("Immediate customer notification failed; GitHub fallback will retry:", error);
+  }
+  toast(sentImmediately ? ("Notification sent to " + c.name) : ("Message queued for " + c.name + "; backup will retry if needed."), "ok");
+  $("#cmTitle").value = ""; $("#cmBody").value = ""; CM.selectedId = ""; CM.search = ""; $("#cmSearch").value = ""; paintCmCustomers(); paintCmSelected();
 }).finally(updateCmSend);
 const CM_ST = { pending: ["Pending", "schedule", ""], sent: ["Sent", "check_circle", "sent"], failed: ["Failed", "error", "failed"], no_tokens: ["No app device", "phone_android", "warn"] };
 function paintCmHistory() {
