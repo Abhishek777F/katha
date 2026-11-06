@@ -2045,7 +2045,9 @@ function loanForm(cid, L) {
   });
 }
 async function saveLoan(ref, cid, f, editing) {
-  requireOnline(); const cRef = doc(db, "customers", cid);
+  requireOnline();
+  const cRef = doc(db, "customers", cid);
+  const customerNotificationRef = editing ? null : doc(collection(db, "customerNotifications"));
   await runTransaction(db, async tx => {
     const [cs, ls] = await Promise.all([tx.get(cRef), tx.get(ref)]);
     if (!cs.exists() || cs.data().deleted) throw new UserError("Customer is not available.");
@@ -2061,7 +2063,29 @@ async function saveLoan(ref, cid, f, editing) {
     }
     tx.update(cRef, { totalPaise: (C.totalPaise | 0) + delta, updatedAt: serverTimestamp(), updatedBy: S.user.uid });
     tx.set(newNotifRef(), evt(editing ? "loan_updated" : "loan_created", { customerId: cid, loanId: ref.id, message: `${f.name} ${fmtQty(f.qty, f.unit)} ${inr(f.totalPaise)} – ${cName(cid)}` }));
+    if (!editing) {
+      tx.set(customerNotificationRef, {
+        customerId: cid,
+        customerName: C.name,
+        title: "New loan added",
+        body: `${f.name} · ${fmtQty(f.qty, f.unit)} · ${inr(f.totalPaise)} added to your account.`,
+        senderName: "Abhi",
+        type: "loan_created",
+        status: "pending",
+        read: false,
+        createdAt: serverTimestamp(),
+        createdBy: S.user.uid,
+        createdByEmail: S.user.email || ""
+      });
+    }
   });
+  if (customerNotificationRef) {
+    try {
+      await dispatchCustomerNotification(customerNotificationRef.id);
+    } catch (err) {
+      console.warn("Loan notification remains pending for retry:", err);
+    }
+  }
 }
 ACT.editLoan = b => go("editloan/" + b.dataset.id);
 ACT.delLoan = async b => {
@@ -2111,7 +2135,8 @@ function renderPay(r) {
 async function receivePayment(p) {
   requireOnline();
   const cRef = doc(db, "customers", p.cid), rcRef = doc(db, "counters", "receipts"), pRef = doc(db, "payments", p.payId);
-  return runTransaction(db, async tx => {
+  const customerNotificationRef = doc(collection(db, "customerNotifications"));
+  const receiptNo = await runTransaction(db, async tx => {
     const [cs, rc, ps] = await Promise.all([tx.get(cRef), tx.get(rcRef), tx.get(pRef)]);
     if (ps.exists()) throw new UserError("This payment was already saved.");
     if (!cs.exists() || cs.data().deleted) throw new UserError("Customer is not available.");
@@ -2122,8 +2147,27 @@ async function receivePayment(p) {
     tx.update(cRef, { paidPaise: (C.paidPaise | 0) + p.amt, updatedAt: serverTimestamp(), updatedBy: S.user.uid });
     tx.set(pRef, { customerId: p.cid, amountPaise: p.amt, method: "CASH", paymentDate: p.date, time: p.time, receiptNo, notes: p.notes, status: "active", createdAt: serverTimestamp(), createdBy: S.user.uid, createdByEmail: S.user.email || "", updatedAt: serverTimestamp(), updatedBy: S.user.uid });
     tx.set(newNotifRef(), evt("payment_received", { customerId: p.cid, paymentId: p.payId, message: `${inr(p.amt)} from ${C.name} (${receiptNo})` }));
+    tx.set(customerNotificationRef, {
+      customerId: p.cid,
+      customerName: C.name,
+      title: "Payment received",
+      body: `${inr(p.amt)} payment received. Receipt: ${receiptNo}. Remaining balance: ${inr(out - p.amt)}.`,
+      senderName: "Abhi",
+      type: "payment_received",
+      status: "pending",
+      read: false,
+      createdAt: serverTimestamp(),
+      createdBy: S.user.uid,
+      createdByEmail: S.user.email || ""
+    });
     return receiptNo;
   });
+  try {
+    await dispatchCustomerNotification(customerNotificationRef.id);
+  } catch (err) {
+    console.warn("Payment notification remains pending for retry:", err);
+  }
+  return receiptNo;
 }
 
 /* ===== Payment history (per customer) ===== */
