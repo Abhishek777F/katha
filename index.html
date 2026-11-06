@@ -2397,7 +2397,7 @@ function paintCmHistory() {
   const list = cmHistory.filter(cmVisible);
   if (!list.length) { el.innerHTML = emptyBox("mark_email_read", "No messages sent yet", "Messages you send to customers will appear here."); return; }
   el.innerHTML = list.map(m => { const pend = cmIsPending(m), st = CM_ST[String(m.status || "pending").toLowerCase()] || CM_ST.pending, c = cust(m.customerId) || { id: m.customerId || "?", name: m.customerName || "?" };
-    return `<div class="swp"><div class="swbg cmdel">${ic("delete")} Delete</div><article class="cm-h${pend ? " cm-pend" : ""}" data-id="${esc(m.id)}" ${pend ? `data-hold="cmEdit"` : ""}>${cav(c, 40)}<div class="grow"><div class="row" style="align-items:flex-start;gap:8px"><div class="grow"><div class="tt">${esc(m.title || "Message")}</div><div class="to">To ${esc(m.customerName || m.customerId || "Customer")} · ${esc(m.customerId || "")}</div></div><span class="cm-pill ${st[2]}">${ic(st[1])}${st[0]}</span></div><div class="bd">${esc(m.body || "")}</div><div class="tm">${esc(fmtTs(m.createdAt))} · from ${esc(m.senderName || "Abhi")}${pend ? " · Hold to resend" : ""}</div></div></article></div>`; }).join("");
+    return `<div class="swp"><div class="swbg cmdel">${ic("delete")} Delete</div><article class="cm-h${pend ? " cm-pend" : ""}" data-id="${esc(m.id)}" ${pend ? `data-hold="cmEdit"` : ""}>${cav(c, 40)}<div class="grow"><div class="row" style="align-items:flex-start;gap:8px"><div class="grow"><div class="tt">${esc(m.title || "Message")}</div><div class="to">To ${esc(m.customerName || m.customerId || "Customer")} · ${esc(m.customerId || "")}</div></div><span class="cm-pill ${st[2]}">${ic(st[1])}${st[0]}</span></div><div class="bd">${esc(m.body || "")}</div><div class="tm">${esc(fmtTs(m.createdAt))} · from ${esc(m.senderName || "Abhi")}${pend ? " · Hold to edit" : ""}</div></div></article></div>`; }).join("");
 }
 function cmDismiss(ids) { const s = CMDIS(); ids.forEach(i => s.add(i)); P.set("cmDis", JSON.stringify([...s].slice(-800))); }
 function cmSwipe(list) {
@@ -2448,6 +2448,11 @@ ACT.cmClearAll = async () => {
 ACT.cmEdit = async b => {
   const id = b.dataset.id, m = cmHistory.find(x => x.id === id);
   if (!m || !cmIsPending(m) || cmBusy.has(id)) return;
+  if (!await askDlg({
+    title: "Edit pending message?",
+    msg: `Do you want to edit <b>${esc(m.title || "Message")}</b> for <b>${esc(m.customerName || m.customerId)}</b>? The message will not be sent until you choose to send it.`,
+    ok: "Edit"
+  })) return;
   const c = cust(m.customerId);
   if (!c || c.deleted) return toast("This customer is not available.", "bad");
   CM.editingId = id; CM.selectedId = c.id;
