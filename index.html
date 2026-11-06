@@ -2308,12 +2308,12 @@ ACT.clearAll = async () => {
 };
 
 /* ===== Send one customer message ===== */
-const CM = { selectedId: "", search: "" };
+const CM = { selectedId: "", search: "", editingId: "" };
 const CM_TPL = [["Payment reminder", "Payment Reminder", "Please visit Balappa Provision Store regarding your pending balance."], ["Thank you", "Thank You", "Thank you for your payment. We appreciate your trust in Balappa Provision Store."]];
 let cmHistory = [], cmHistoryUnsub = null, cmHistoryLoaded = false;
 ROUTES.sendmessage = { ptr: true, data: true, title: "Send Message", nav: "sendmessage", render: renderSendMessage, paint: paintSendMessage };
 function renderSendMessage() {
-  CM.selectedId = ""; CM.search = ""; cmHistoryLoaded = false; cmHistory = [];
+  CM.selectedId = ""; CM.search = ""; CM.editingId = ""; cmHistoryLoaded = false; cmHistory = [];
   $("#view").innerHTML = `
     <div class="cm-hero"><div class="hi">${ic("send")}</div><div><h3>Send a personal message</h3><p>Reaches one customer's My Katha app only</p></div></div>
     <div class="cm-step"><div class="cm-sh"><span class="cm-n">1</span><div><h4>Choose customer</h4><small>Search by name, customer ID or mobile</small></div></div>
@@ -2328,7 +2328,7 @@ function renderSendMessage() {
       <div class="cm-pv"><div class="top"><span class="app">${ic("menu_book")}</span><span>My Katha · Abhi · now</span></div><div class="pt" id="cmPvT">Message title</div><div class="pb" id="cmPvB">Your message will appear here.</div></div>
       <button class="btn pri block" id="cmSend" data-act="sendCustomerMessage" style="margin-top:14px" disabled>${ic("send")} Send message</button>
       <div class="cm-hint">${ic("verified_user", 1)}<span>You'll confirm before sending. Customer, loan and payment records are never changed.</span></div></div>
-    <div class="sec"><div><h3>Sent message history</h3><div class="mu sm">Latest 30 customer messages</div></div><button class="ibtn binbtn" data-act="cmClearAll" aria-label="Clear all messages">${ic("delete")}</button></div><p class="mu sm" style="margin:0 2px 10px">Swipe right to delete · Hold a pending message to resend</p><div id="cmHistory">${loading()}</div>`;
+    <div class="sec"><div><h3>Sent message history</h3><div class="mu sm">Latest 30 customer messages</div></div><button class="ibtn binbtn" data-act="cmClearAll" aria-label="Clear all messages">${ic("delete")}</button></div><p class="mu sm" style="margin:0 2px 10px">Swipe right to permanently delete · Hold a pending message to edit</p><div id="cmHistory">${loading()}</div>`;
   $("#cmSearch").addEventListener("input", e => { CM.search = e.target.value; paintCmCustomers(); });
   $("#cmTitle").addEventListener("input", updateCmSend);
   $("#cmBody").addEventListener("input", updateCmSend);
@@ -2369,18 +2369,23 @@ ACT.sendCustomerMessage = b => lock(b, async () => {
   if (!c || c.deleted) throw new UserError("Select an active customer first.");
   if (!title || title.length > 80) throw new UserError("Enter a title of 1–80 characters.");
   if (!body || body.length > 1000) throw new UserError("Enter a message of 1–1000 characters.");
-  if (!await askDlg({ title: "Send this message?", msg: `Only <b>${esc(c.name)}</b> (${esc(c.id)}) will receive this.<br><br><b>${esc(title)}</b><br>${esc(body).replace(/\n/g, "<br>")}<br><br>Sender: <b>Abhi</b>`, ok: "Confirm and send" })) return;
-  const notificationRef = doc(collection(db, "customerNotifications"));
-  await setDoc(notificationRef, { customerId: c.id, customerName: c.name, title, body, senderName: "Abhi", type: "custom_message", status: "pending", read: false, createdAt: serverTimestamp(), createdBy: S.user.uid, createdByEmail: S.user.email || "" });
-  let sentImmediately = false;
-  try {
-    await dispatchCustomerNotification(notificationRef.id);
-    sentImmediately = true;
-  } catch (error) {
-    // Leave the Firestore record pending so the existing GitHub workflow can retry it.
-    console.warn("Immediate customer notification failed; GitHub fallback will retry:", error);
+  if (CM.editingId) {
+    const m = cmHistory.find(x => x.id === CM.editingId);
+    if (!m || !cmIsPending(m)) throw new UserError("Only pending messages can be edited.");
+    if (!await askDlg({ title: "Save message changes?", msg: `Update the pending message for <b>${esc(c.name)}</b>? It will remain pending and will not be sent until the notification worker processes it.`, ok: "Save changes" })) return;
+    await updateDoc(doc(db, "customerNotifications", CM.editingId), { title, body, updatedAt: serverTimestamp() });
+    CM.editingId = ""; $("#cmSend").innerHTML = `${ic("send")} Send message`;
+    toast("Message changes saved", "ok");
+  } else {
+    if (!await askDlg({ title: "Send this message?", msg: `Only <b>${esc(c.name)}</b> (${esc(c.id)}) will receive this.<br><br><b>${esc(title)}</b><br>${esc(body).replace(/\n/g, "<br>")}<br><br>Sender: <b>Abhi</b>`, ok: "Confirm and send" })) return;
+    const notificationRef = doc(collection(db, "customerNotifications"));
+    await setDoc(notificationRef, { customerId: c.id, customerName: c.name, title, body, senderName: "Abhi", type: "custom_message", status: "pending", read: false, createdAt: serverTimestamp(), createdBy: S.user.uid, createdByEmail: S.user.email || "" });
+    let sentImmediately = false;
+    try { await dispatchCustomerNotification(notificationRef.id); sentImmediately = true; }
+    catch (error) { console.warn("Immediate customer notification failed; GitHub fallback will retry:", error); }
+    toast(sentImmediately ? ("Notification sent to " + c.name) : ("Message queued for " + c.name + "; backup will retry if needed."), "ok");
   }
-  toast(sentImmediately ? ("Notification sent to " + c.name) : ("Message queued for " + c.name + "; backup will retry if needed."), "ok"); $("#cmTitle").value = ""; $("#cmBody").value = ""; CM.selectedId = ""; CM.search = ""; $("#cmSearch").value = ""; paintCmCustomers(); paintCmSelected();
+  $("#cmTitle").value = ""; $("#cmBody").value = ""; CM.selectedId = ""; CM.search = ""; $("#cmSearch").value = ""; paintCmCustomers(); paintCmSelected(); paintCmHistory();
 }).finally(updateCmSend);
 const CM_ST = { pending: ["Pending", "schedule", ""], sent: ["Sent", "check_circle", "sent"], failed: ["Failed", "error", "failed"], no_tokens: ["No app device", "phone_android", "warn"] };
 const CMDIS = () => { try { return new Set(JSON.parse(P.get("cmDis", "[]"))); } catch { return new Set(); } };
@@ -2392,7 +2397,7 @@ function paintCmHistory() {
   const list = cmHistory.filter(cmVisible);
   if (!list.length) { el.innerHTML = emptyBox("mark_email_read", "No messages sent yet", "Messages you send to customers will appear here."); return; }
   el.innerHTML = list.map(m => { const pend = cmIsPending(m), st = CM_ST[String(m.status || "pending").toLowerCase()] || CM_ST.pending, c = cust(m.customerId) || { id: m.customerId || "?", name: m.customerName || "?" };
-    return `<div class="swp"><div class="swbg cmdel">${ic("delete")} Delete</div><article class="cm-h${pend ? " cm-pend" : ""}" data-id="${esc(m.id)}" ${pend ? `data-hold="cmResend"` : ""}>${cav(c, 40)}<div class="grow"><div class="row" style="align-items:flex-start;gap:8px"><div class="grow"><div class="tt">${esc(m.title || "Message")}</div><div class="to">To ${esc(m.customerName || m.customerId || "Customer")} · ${esc(m.customerId || "")}</div></div><span class="cm-pill ${st[2]}">${ic(st[1])}${st[0]}</span></div><div class="bd">${esc(m.body || "")}</div><div class="tm">${esc(fmtTs(m.createdAt))} · from ${esc(m.senderName || "Abhi")}${pend ? " · Hold to resend" : ""}</div></div></article></div>`; }).join("");
+    return `<div class="swp"><div class="swbg cmdel">${ic("delete")} Delete</div><article class="cm-h${pend ? " cm-pend" : ""}" data-id="${esc(m.id)}" ${pend ? `data-hold="cmEdit"` : ""}>${cav(c, 40)}<div class="grow"><div class="row" style="align-items:flex-start;gap:8px"><div class="grow"><div class="tt">${esc(m.title || "Message")}</div><div class="to">To ${esc(m.customerName || m.customerId || "Customer")} · ${esc(m.customerId || "")}</div></div><span class="cm-pill ${st[2]}">${ic(st[1])}${st[0]}</span></div><div class="bd">${esc(m.body || "")}</div><div class="tm">${esc(fmtTs(m.createdAt))} · from ${esc(m.senderName || "Abhi")}${pend ? " · Hold to resend" : ""}</div></div></article></div>`; }).join("");
 }
 function cmDismiss(ids) { const s = CMDIS(); ids.forEach(i => s.add(i)); P.set("cmDis", JSON.stringify([...s].slice(-800))); }
 function cmSwipe(list) {
@@ -2411,23 +2416,48 @@ function cmSwipe(list) {
     a.style.transition = "transform .25s ease,opacity .25s ease";
     if (mode === "h" && dx > w * .35) {
       a.style.transform = `translateX(${w}px)`; a.style.opacity = "0"; const wrap = a.closest(".swp"), id = a.dataset.id; navigator.vibrate?.(15);
-      setTimeout(() => { wrap.style.height = wrap.offsetHeight + "px"; wrap.style.transition = "height .22s,margin .22s"; void wrap.offsetHeight; wrap.style.height = "0"; wrap.style.marginBottom = "0"; wrap.style.overflow = "hidden"; setTimeout(() => { cmDismiss([id]); paintCmHistory(); toast("Message deleted from history", "ok"); }, 230); }, 180);
+      setTimeout(() => { wrap.style.height = wrap.offsetHeight + "px"; wrap.style.transition = "height .22s,margin .22s"; void wrap.offsetHeight; wrap.style.height = "0"; wrap.style.marginBottom = "0"; wrap.style.overflow = "hidden"; setTimeout(async () => {
+        try {
+          requireOnline();
+          await deleteDoc(doc(db, "customerNotifications", id));
+          wrap?.remove();
+          toast("Message permanently deleted from Firestore", "ok");
+        } catch (error) {
+          a.style.transform = ""; a.style.opacity = "";
+          wrap.style.height = ""; wrap.style.overflow = ""; wrap.style.marginBottom = "";
+          toast("Could not delete: " + friendly(error), "bad");
+        }
+      }, 230); }, 180);
     } else { a.style.transform = ""; a.style.opacity = ""; }
   };
   list.addEventListener("touchend", end); list.addEventListener("touchcancel", end);
 }
 ACT.cmClearAll = async () => {
-  const list = cmHistory.filter(cmVisible); if (!list.length) return toast("No messages to clear.");
-  if (!await askDlg({ title: "Clear all sent messages?", msg: "Every message will be removed from this history list on this device. Messages already saved or delivered to customers, and all customer, loan and payment records, are not changed.", ok: "Clear all", danger: true })) return;
-  cmDismiss(list.map(m => m.id)); P.set("cmCleared", String(Math.max(0, ...cmHistory.map(m => tsMs(m.createdAt))))); paintCmHistory(); toast("History cleared", "ok");
+  const list = cmHistory.filter(cmVisible); if (!list.length) return toast("No messages to delete.");
+  if (!await askDlg({ title: "Delete all messages?", msg: `Permanently delete all ${list.length} messages from Firestore? This cannot be undone. Customer, loan and payment records are not affected.`, ok: "Delete all", danger: true })) return;
+  try {
+    requireOnline();
+    for (let i = 0; i < list.length; i += 450) {
+      const batch = writeBatch(db);
+      list.slice(i, i + 450).forEach(m => batch.delete(doc(db, "customerNotifications", m.id)));
+      await batch.commit();
+    }
+    toast("All selected messages permanently deleted", "ok");
+  } catch (error) { toast("Could not delete messages: " + friendly(error), "bad"); }
 };
-ACT.cmResend = async b => {
-  const id = b.dataset.id, m = cmHistory.find(x => x.id === id); if (!m || !cmIsPending(m) || cmBusy.has(id)) return;
-  if (!await askDlg({ title: "Resend this message?", msg: `Send <b>${esc(m.title || "Message")}</b> to <b>${esc(m.customerName || m.customerId)}</b> (${esc(m.customerId)}) again?`, ok: "Resend" })) return;
-  requireOnline(); cmBusy.add(id); toast("Resending to " + (m.customerName || m.customerId) + "…");
-  try { await dispatchCustomerNotification(id); toast("Notification sent to " + (m.customerName || m.customerId), "ok"); }
-  catch (e) { toast("Could not resend: " + friendly(e), "bad"); }
-  finally { cmBusy.delete(id); }
+ACT.cmEdit = async b => {
+  const id = b.dataset.id, m = cmHistory.find(x => x.id === id);
+  if (!m || !cmIsPending(m) || cmBusy.has(id)) return;
+  const c = cust(m.customerId);
+  if (!c || c.deleted) return toast("This customer is not available.", "bad");
+  CM.editingId = id; CM.selectedId = c.id;
+  $("#cmTitle").value = m.title || "";
+  $("#cmBody").value = m.body || "";
+  $("#cmSend").innerHTML = `${ic("save")} Save changes`;
+  paintCmSelected(); updateCmSend();
+  $("#cmComposeCard")?.scrollIntoView({ behavior: "smooth", block: "center" });
+  $("#cmTitle")?.focus({ preventScroll: true });
+  toast("Edit the message fields, then save changes.");
 };
 function paintSendMessage() { paintCmCustomers(); paintCmSelected(); paintCmHistory(); }
 
