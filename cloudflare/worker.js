@@ -133,8 +133,8 @@ async function customerIsOnline(uid, customerId, accessToken) {
 async function getTokens(uid, accessToken) {
   const url = documentUrl("customerPushTokens", uid) + "/tokens";
   const result = await googleRequest(url, accessToken);
-  return (result.documents || []).map(doc => field(doc, "token"))
-    .filter(token => typeof token === "string" && token.trim());
+  return (result.documents || []).map(doc => ({ uid, token: field(doc, "token") }))
+    .filter(row => typeof row.token === "string" && row.token.trim());
 }
 async function sendFCM(token, message, accessToken) {
   const url = "https://fcm.googleapis.com/v1/projects/" + PROJECT_ID + "/messages:send";
@@ -226,7 +226,7 @@ async function handleSend(request, env) {
       for (const customerUid of onlineUids) {
         tokens.push(...await getTokens(customerUid, accessToken));
       }
-      const uniqueTokens = [...new Set(tokens)];
+      const uniqueTokens = [...new Map(tokens.map(row => [row.token, row])).values()];
       if (!uniqueTokens.length) {
         const current = await getNotification(notificationId, accessToken);
         await patchNotification(notificationId, current.updateTime, {
@@ -241,12 +241,9 @@ async function handleSend(request, env) {
       for (const token of uniqueTokens) {
         try {
           // Recheck login state immediately before sending, so a logout stops subsequent sends.
-          let stillOnline = false;
-          for (const customerUid of onlineUids) {
-            if (await customerIsOnline(customerUid, data.customerId, accessToken)) { stillOnline = true; break; }
-          }
+          const stillOnline = await customerIsOnline(token.uid, data.customerId, accessToken);
           if (!stillOnline) { failureCount++; continue; }
-          await sendFCM(token, data, accessToken);
+          await sendFCM(token.token, data, accessToken);
           successCount++;
         } catch (_) { failureCount++; }
       }
