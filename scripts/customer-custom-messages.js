@@ -61,6 +61,8 @@ async function getCustomerTokens(db, customerId) {
   const links = await db.collection('customerLinks').where('customerId', '==', customerId).get();
   const unique = new Map();
   for (const link of links.docs) {
+    const presenceSnap = await db.collection('customerPresence').doc(link.id).get();
+    if (!presenceSnap.exists || presenceSnap.get('online') !== true) continue;
     const tokenSnap = await db.collection(TOKEN_COLLECTION).doc(link.id).collection('tokens').get();
     for (const tokenDoc of tokenSnap.docs) {
       const token = tokenDoc.get('token');
@@ -85,7 +87,7 @@ async function sendToCustomer(messaging, notification, tokenRows) {
     const response = await messaging.sendEachForMulticast({
       tokens: batch.map(row => row.token),
       data: {
-        type: 'custom_message',
+        type: notification.type || 'custom_message',
         customerNotificationId: notification.id,
         customerId: notification.customerId,
         title: notification.title,
@@ -120,6 +122,17 @@ async function processOne(db, messaging, docSnap) {
   const customerId = typeof data.customerId === 'string' ? data.customerId.trim() : '';
   const title = typeof data.title === 'string' ? data.title.trim() : '';
   const body = typeof data.body === 'string' ? data.body.trim() : '';
+  const type = typeof data.type === 'string' ? data.type : 'custom_message';
+
+  if (!['custom_message', 'loan_created', 'payment_received'].includes(type)) {
+    await ref.set({
+      status: 'failed',
+      lastError: 'Unsupported customer notification type.',
+      failedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+    return;
+  }
 
   if (!customerId || !title || !body || title.length > 80 || body.length > 1000) {
     await ref.set({
@@ -135,10 +148,10 @@ async function processOne(db, messaging, docSnap) {
   try {
     const tokens = await getCustomerTokens(db, customerId);
     if (!tokens.length) {
-      // Keep it pending so a customer who registers FCM later can receive it.
+      // Keep it pending until the customer logs in again.
       await ref.set({
         status: 'pending',
-        lastError: 'No FCM tokens are registered for this customer yet.',
+        lastError: 'Customer is offline or has no registered FCM token. Waiting for login.',
         lastAttemptAt: admin.firestore.FieldValue.serverTimestamp(),
         processingAt: admin.firestore.FieldValue.delete(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp()
@@ -148,7 +161,7 @@ async function processOne(db, messaging, docSnap) {
     }
 
     const result = await sendToCustomer(messaging, {
-      id: docSnap.id, customerId, title, body
+      id: docSnap.id, customerId, title, body, type
     }, tokens);
 
     if (result.successCount > 0) {
