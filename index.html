@@ -1369,8 +1369,10 @@ let globalUnsubs = [], pageUnsubs = [], paintQueued = false, idleT = null;
 const ACT = {};   // click-action table (declared early: other code adds to it)
 const ready = () => S.ready;
 document.head.insertAdjacentHTML("beforeend", `<style>
-.online-dot{display:inline-block;width:7px;height:7px;min-width:7px;border-radius:50%;background:#22c55e;margin-left:6px;vertical-align:middle;box-shadow:0 0 0 2px rgba(34,197,94,.14)}
-.actp.offline i{display:none}.actp.offline{color:var(--mu,#888);background:rgba(128,128,128,.10)}
+.customer-avatar-wrap{position:relative;display:block;flex:none}
+.customer-online-dot{position:absolute;right:0;bottom:1px;width:12px;height:12px;border-radius:50%;background:#22c55e;border:2px solid var(--card);box-shadow:0 0 0 1px rgba(34,197,94,.12)}
+.cdc .actp i{display:none}
+.cdc .actp.offline{color:#dc2626;background:rgba(239,68,68,.15)}
 </style>`);
 
 /* ---------- local admin profile (this device only, never uploaded) ---------- */
@@ -1849,8 +1851,8 @@ function renderCustomers() {
 }
 function custCard(c) {
   const o = cOut(c);
-  return `<div class="item cust" data-go="customer/${esc(c.id)}" data-hold="delCustomer" data-id="${esc(c.id)}">${cav(c, 50)}
-    <div class="grow"><div class="t">${esc(c.name)}${S.onlineCustomers.has(c.id) ? '<span class="online-dot" aria-label="Online" title="Online"></span>' : ""}</div><div class="s"><span class="chip">${esc(c.id)}</span></div>
+  return `<div class="item cust" data-go="customer/${esc(c.id)}" data-hold="delCustomer" data-id="${esc(c.id)}"><span class="customer-avatar-wrap">${cav(c, 50)}${S.onlineCustomers.has(c.id) ? '<span class="customer-online-dot" aria-label="Online" title="Online"></span>' : ""}</span>
+    <div class="grow"><div class="t">${esc(c.name)}</div><div class="s"><span class="chip">${esc(c.id)}</span></div>
     <div class="s">${ic("call", 1)} ${esc(c.mobile || NP)}</div><div class="s">Remaining <b class="${o > 0 ? "neg" : "pos"}">${inr(o)}</b></div></div>
     <button class="edit" data-act="editCustomer" data-id="${esc(c.id)}" aria-label="Edit customer">${ic("edit", 1)}</button></div>`;
 }
