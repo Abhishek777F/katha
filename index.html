@@ -1364,7 +1364,7 @@ async function lock(btn, fn) {
 }
 
 /* ---------- state ---------- */
-const S = { user: null, customers: new Map(), onlineCustomers: new Set(), tot: { gave: 0, got: 0, out: 0, customers: 0, withOut: 0 }, ready: false, unread: 0, recent: [], lastSync: null, err: "", route: null, wait: false };
+const S = { user: null, customers: new Map(), onlineCustomers: new Set(), presenceRecords: new Map(), tot: { gave: 0, got: 0, out: 0, customers: 0, withOut: 0 }, ready: false, unread: 0, recent: [], lastSync: null, err: "", route: null, wait: false };
 let globalUnsubs = [], pageUnsubs = [], paintQueued = false, idleT = null;
 const ACT = {};   // click-action table (declared early: other code adds to it)
 const ready = () => S.ready;
@@ -1511,16 +1511,22 @@ function startGlobal() {
     S.customers = new Map(s.docs.map(d => [d.id, { id: d.id, ...d.data() }]));
     S.ready = true; S.lastSync = new Date(); S.err = ""; recalc(); schedulePaint();
   }, onErr));
-  globalUnsubs.push(onSnapshot(collection(db, "customerPresence"), s => {
+  const refreshPresenceStatus = () => {
+    const now = Date.now();
     const previousOnline = S.onlineCustomers;
-    const nextOnline = new Set(s.docs.filter(d => d.data().online === true)
-      .map(d => d.data().customerId).filter(Boolean));
+    const nextOnline = new Set();
+    for (const p of S.presenceRecords.values()) {
+      const lastSeen = p.lastSeen?.toMillis?.() ?? (p.lastSeen instanceof Date ? p.lastSeen.getTime() : NaN);
+      const age = now - lastSeen;
+      if (p.online === true && p.customerId && Number.isFinite(lastSeen) && age >= -30000 && age <= 90000) {
+        nextOnline.add(p.customerId);
+      }
+    }
     const newlyOnline = [...nextOnline].filter(id => !previousOnline.has(id));
     S.onlineCustomers = nextOnline;
     schedulePaint();
 
-    // When a customer logs in, immediately ask the Worker to deliver their queued messages.
-    // The Worker still verifies the live presence document before sending.
+    // Deliver queued notifications only when a fresh customer session becomes online.
     newlyOnline.forEach(customerId => {
       getDocs(query(collection(db, "customerNotifications"), where("customerId", "==", customerId)))
         .then(snapshot => snapshot.docs
@@ -1530,7 +1536,13 @@ function startGlobal() {
           )))
         .catch(error => console.warn("Could not check queued notifications:", error));
     });
+  };
+  globalUnsubs.push(onSnapshot(collection(db, "customerPresence"), s => {
+    S.presenceRecords = new Map(s.docs.map(d => [d.id, d.data()]));
+    refreshPresenceStatus();
   }, onErr));
+  const presenceTimer = setInterval(refreshPresenceStatus, 15000);
+  globalUnsubs.push(() => clearInterval(presenceTimer));
   globalUnsubs.push(onSnapshot(query(collection(db, "notifications"), where("readAt", "==", null), limit(99)), s => { S.unread = s.size; badge(); }, onErr));
 }
 function badge() {
