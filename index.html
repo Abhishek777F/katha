@@ -1834,7 +1834,7 @@ ACT.openEvt = b => { if (b.dataset.c && cust(b.dataset.c)) go("customer/" + b.da
 
 /* ===== Customers ===== */
 const CF = { q: "", f: "all", s: P.get("csort", "new") };
-const SORTS = [["new", "Newest first", "schedule"], ["old", "Oldest first", "history"], ["az", "Name A–Z", "sort_by_alpha"], ["za", "Name Z–A", "sort_by_alpha"], ["hi", "Highest balance", "trending_up"], ["lo", "Lowest balance", "trending_down"], ["id", "Customer ID", "badge"]];
+const SORTS = [["new", "Newest first", "schedule"], ["online", "Online customers first", "wifi"], ["old", "Oldest first", "history"], ["az", "Name A–Z", "sort_by_alpha"], ["za", "Name Z–A", "sort_by_alpha"], ["hi", "Highest balance", "trending_up"], ["lo", "Lowest balance", "trending_down"], ["id", "Customer ID", "badge"]];
 const sortLabel = () => (SORTS.find(s => s[0] === CF.s) || SORTS[0])[1];
 ACT.sortSheet = () => openSheet("Sort customers", SORTS.map(([k, l, i]) => `<div class="lrow" data-sort="${k}">${ic(i)}<div class="grow">${l}</div>${CF.s === k ? `<span class="ms" style="color:var(--ac1)">check_circle</span>` : ""}</div>`).join(""), root => {
   root.onclick = e => { const r = e.target.closest("[data-sort]"); if (!r) return; CF.s = r.dataset.sort; P.set("csort", CF.s); closeSheet(); const l = $("#sortLbl"); if (l) l.textContent = sortLabel(); paintCustomers(); };
@@ -1863,7 +1863,7 @@ function paintCustomers() {
     (!q || c.name.toLowerCase().includes(q) || c.id.toLowerCase().includes(q) || (qd.length > 2 && (c.mobile || "").includes(qd))))
     ;
   const created = c => c.createdAt ? tsMs(c.createdAt) : Date.now();
-  const SO = { new: (a, b) => created(b) - created(a), old: (a, b) => created(a) - created(b), az: (a, b) => a.name.localeCompare(b.name), za: (a, b) => b.name.localeCompare(a.name),
+  const SO = { new: (a, b) => created(b) - created(a), online: (a, b) => Number(S.onlineCustomers.has(b.id)) - Number(S.onlineCustomers.has(a.id)) || created(b) - created(a), old: (a, b) => created(a) - created(b), az: (a, b) => a.name.localeCompare(b.name), za: (a, b) => b.name.localeCompare(a.name),
     hi: (a, b) => cOut(b) - cOut(a), lo: (a, b) => cOut(a) - cOut(b), id: (a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }) };
   list.sort(SO[CF.s] || SO.new);
   if (!list.length) { el.innerHTML = emptyBox("group", S.customers.size ? "No matching customers" : "No customers yet", S.customers.size ? "Try a different search." : "Tap the + button below to add your first customer."); return; }
