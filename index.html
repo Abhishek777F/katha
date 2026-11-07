@@ -1512,9 +1512,24 @@ function startGlobal() {
     S.ready = true; S.lastSync = new Date(); S.err = ""; recalc(); schedulePaint();
   }, onErr));
   globalUnsubs.push(onSnapshot(collection(db, "customerPresence"), s => {
-    S.onlineCustomers = new Set(s.docs.filter(d => d.data().online === true)
+    const previousOnline = S.onlineCustomers;
+    const nextOnline = new Set(s.docs.filter(d => d.data().online === true)
       .map(d => d.data().customerId).filter(Boolean));
+    const newlyOnline = [...nextOnline].filter(id => !previousOnline.has(id));
+    S.onlineCustomers = nextOnline;
     schedulePaint();
+
+    // When a customer logs in, immediately ask the Worker to deliver their queued messages.
+    // The Worker still verifies the live presence document before sending.
+    newlyOnline.forEach(customerId => {
+      getDocs(query(collection(db, "customerNotifications"), where("customerId", "==", customerId)))
+        .then(snapshot => snapshot.docs
+          .filter(d => d.data().status === "pending")
+          .forEach(d => dispatchCustomerNotification(d.id).catch(error =>
+            console.warn("Queued customer notification remains pending:", error)
+          )))
+        .catch(error => console.warn("Could not check queued notifications:", error));
+    });
   }, onErr));
   globalUnsubs.push(onSnapshot(query(collection(db, "notifications"), where("readAt", "==", null), limit(99)), s => { S.unread = s.size; badge(); }, onErr));
 }
