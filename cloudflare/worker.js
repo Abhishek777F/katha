@@ -125,13 +125,8 @@ async function findCustomerLinks(customerId, accessToken) {
 async function customerIsOnline(uid, customerId, accessToken) {
   try {
     const presence = await googleRequest(documentUrl("customerPresence", uid), accessToken);
-    const lastSeen = Date.parse(field(presence, "lastSeen") || "");
-    const ageMs = Date.now() - lastSeen;
     return field(presence, "online") === true
-      && field(presence, "customerId") === customerId
-      && Number.isFinite(lastSeen)
-      && ageMs >= -30000
-      && ageMs <= 90000;
+      && field(presence, "customerId") === customerId;
   } catch (_) {
     return false;
   }
