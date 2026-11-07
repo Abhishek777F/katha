@@ -1364,10 +1364,14 @@ async function lock(btn, fn) {
 }
 
 /* ---------- state ---------- */
-const S = { user: null, customers: new Map(), tot: { gave: 0, got: 0, out: 0, customers: 0, withOut: 0 }, ready: false, unread: 0, recent: [], lastSync: null, err: "", route: null, wait: false };
+const S = { user: null, customers: new Map(), onlineCustomers: new Set(), tot: { gave: 0, got: 0, out: 0, customers: 0, withOut: 0 }, ready: false, unread: 0, recent: [], lastSync: null, err: "", route: null, wait: false };
 let globalUnsubs = [], pageUnsubs = [], paintQueued = false, idleT = null;
 const ACT = {};   // click-action table (declared early: other code adds to it)
 const ready = () => S.ready;
+document.head.insertAdjacentHTML("beforeend", `<style>
+.online-dot{display:inline-block;width:7px;height:7px;min-width:7px;border-radius:50%;background:#22c55e;margin-left:6px;vertical-align:middle;box-shadow:0 0 0 2px rgba(34,197,94,.14)}
+.actp.offline i{display:none}.actp.offline{color:var(--mu,#888);background:rgba(128,128,128,.10)}
+</style>`);
 
 /* ---------- local admin profile (this device only, never uploaded) ---------- */
 const PROF = {
@@ -1506,6 +1510,11 @@ function startGlobal() {
   globalUnsubs.push(onSnapshot(collection(db, "customers"), s => {
     S.customers = new Map(s.docs.map(d => [d.id, { id: d.id, ...d.data() }]));
     S.ready = true; S.lastSync = new Date(); S.err = ""; recalc(); schedulePaint();
+  }, onErr));
+  globalUnsubs.push(onSnapshot(collection(db, "customerPresence"), s => {
+    S.onlineCustomers = new Set(s.docs.filter(d => d.data().online === true)
+      .map(d => d.data().customerId).filter(Boolean));
+    schedulePaint();
   }, onErr));
   globalUnsubs.push(onSnapshot(query(collection(db, "notifications"), where("readAt", "==", null), limit(99)), s => { S.unread = s.size; badge(); }, onErr));
 }
@@ -1826,7 +1835,7 @@ function renderCustomers() {
 function custCard(c) {
   const o = cOut(c);
   return `<div class="item cust" data-go="customer/${esc(c.id)}" data-hold="delCustomer" data-id="${esc(c.id)}">${cav(c, 50)}
-    <div class="grow"><div class="t">${esc(c.name)}</div><div class="s"><span class="chip">${esc(c.id)}</span></div>
+    <div class="grow"><div class="t">${esc(c.name)}${S.onlineCustomers.has(c.id) ? '<span class="online-dot" aria-label="Online" title="Online"></span>' : ""}</div><div class="s"><span class="chip">${esc(c.id)}</span></div>
     <div class="s">${ic("call", 1)} ${esc(c.mobile || NP)}</div><div class="s">Remaining <b class="${o > 0 ? "neg" : "pos"}">${inr(o)}</b></div></div>
     <button class="edit" data-act="editCustomer" data-id="${esc(c.id)}" aria-label="Edit customer">${ic("edit", 1)}</button></div>`;
 }
@@ -1975,7 +1984,7 @@ function paintCustomer() {
   el.innerHTML = `
   ${c.deleted ? `<div class="msg">This customer is in the recycle bin. <a href="#/recycle" data-go="recycle">Restore</a> to add products or payments.</div>` : ""}
   <div class="cdc"><div class="cdc-top"><div class="cdc-av" style="--c:${avColor(c.id)}">${cav(c, 66)}</div>
-    <div class="grow"><div class="nmrow"><span class="nm">${esc(c.name)}</span>${c.deleted ? '<span class="actp bin"><i></i>In bin</span>' : '<span class="actp"><i></i>Active</span>'}</div>
+    <div class="grow"><div class="nmrow"><span class="nm">${esc(c.name)}</span>${c.deleted ? '<span class="actp bin"><i></i>In bin</span>' : (S.onlineCustomers.has(id) ? '<span class="actp"><i></i>Online</span>' : '<span class="actp offline">Offline</span>')}</div>
     <div class="idp">${ic("badge", 1)} <span>Customer ID: <b>${esc(c.id)}</b></span></div></div></div>
     ${c.deleted ? "" : `<button class="eic tr" data-act="editCustomer" data-id="${esc(id)}" aria-label="Edit customer">${ic("edit", 1)}</button>`}
     <div class="cdc-info"><div class="half"><div class="circ">${ic("call", 1)}</div><div><b>${esc(phoneFmt(c.mobile))}</b><small>Phone Number</small></div></div><div class="vdiv"></div>
@@ -2417,7 +2426,16 @@ ACT.sendCustomerMessage = b => lock(b, async () => {
     const m = cmHistory.find(x => x.id === CM.editingId);
     if (!m || !cmIsPending(m)) throw new UserError("Only pending messages can be edited.");
     if (!await askDlg({ title: "Save message changes?", msg: `Update the pending message for <b>${esc(c.name)}</b>? It will remain pending and will not be sent until the notification worker processes it.`, ok: "Save changes" })) return;
-    await updateDoc(doc(db, "customerNotifications", CM.editingId), { title, body, updatedAt: serverTimestamp() });
+    const editRef = doc(db, "customerNotifications", CM.editingId);
+    await runTransaction(db, async tx => {
+      const latest = await tx.get(editRef);
+      if (!latest.exists()) throw new UserError("This message no longer exists.");
+      const latestData = latest.data();
+      if (latestData.type !== "custom_message" || latestData.status !== "pending") {
+        throw new UserError("This message has already started sending or was sent. Only pending messages can be edited.");
+      }
+      tx.update(editRef, { title, body, updatedAt: serverTimestamp() });
+    });
     CM.editingId = ""; $("#cmSend").innerHTML = `${ic("send")} Send message`;
     toast("Message changes saved", "ok");
   } else {
