@@ -2449,7 +2449,7 @@ function renderSendMessage(r) {
   $("#view").innerHTML = `
     <div class="cm-hero"><div class="hi">${ic("send")}</div><div><h3>Send a personal message</h3><p>Reaches one customer's My Katha app only</p></div></div>
     <div class="cm-step"><div class="cm-sh"><span class="cm-n">1</span><div><h4>Selected customer</h4><small>Confirm the recipient before sending</small></div></div><div class="cm-sel">${cav(c,48)}<div class="grow"><b>${esc(c.name)}</b><div class="sub">ID: ${esc(c.id)} · ${esc(c.mobile || "No mobile")}</div></div><button type="button" class="btn sm ghost" data-act="clearMessageCustomer">Change</button></div></div>
-    <div class="cm-step cm-lock" id="cmComposeCard"><div class="cm-sh"><span class="cm-n">2</span><div><h4>Write message</h4><small>Sender name: Abhi</small></div></div>
+    <div class="cm-step" id="cmComposeCard"><div class="cm-sh"><span class="cm-n">2</span><div><h4>Write message</h4><small>Sender name: Abhi</small></div></div>
       <div class="cm-tpl">${CM_TPL.map((t, i) => `<button type="button" data-act="cmTemplate" data-i="${i}">${t[0]}</button>`).join("")}</div>
       <label class="fld"><span>Title</span><input id="cmTitle" maxlength="80" placeholder="e.g. Payment Reminder" autocomplete="off"></label>
       <label class="fld"><span>Message</span><textarea id="cmBody" maxlength="1000" rows="4" placeholder="Write your message to this customer…"></textarea></label>
