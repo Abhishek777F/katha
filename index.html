@@ -2139,24 +2139,31 @@ ACT.delAllLoans = async () => {
   const id = S.route?.name === "customer" ? S.route.arg : "";
   const c = cust(id), active = custLoans.filter(l => l.status === "active");
   if (!c || c.deleted || !active.length) return toast("No active borrowed products to delete.");
-  if (active.length > 450) return toast("Too many products for one safe bulk operation. Delete them in smaller groups.", "bad");
-  const total = active.reduce((sum,l) => sum + (Number(l.totalPaise) || 0), 0);
+  if (active.length > 450) return toast("Too many products for one safe operation. Delete them in smaller groups.", "bad");
+  const total = active.reduce((sum, l) => sum + (Number(l.totalPaise) || 0), 0);
   if (!await askDlg({title:"Delete all borrowed products?",msg:`Move all <b>${active.length}</b> active product records for <b>${esc(c.name)}</b> to deleted status? Their history remains recoverable. The total decreases by <b>${inr(total)}</b>. This is blocked if the remaining total would be less than payments already received.`,ok:"Delete all products",danger:true})) return;
   requireOnline();
-  const cRef=doc(db,"customers",id), refs=active.map(l=>doc(db,"loans",l.id));
-  await runTransaction(db,async tx=>{
-    const reads=await Promise.all([tx.get(cRef),...refs.map(ref=>tx.get(ref))]);
-    const cs=reads[0]; if(!cs.exists() || cs.data().deleted) throw new UserError("Customer is not available.");
-    const C=cs.data(); let sum=0;
-    for(let i=0;i<refs.length;i++){const snap=reads[i+1];if(!snap.exists()||snap.data().status!=="active")throw new UserError("A product changed. Refresh and try again.");sum+=Number(snap.data().totalPaise)||0;}
-    const nextTotal=(C.totalPaise|0)-sum;
-    if(nextTotal<(C.paidPaise|0)) throw new UserError(`Remaining products would total ${inr(nextTotal)}, less than ${inr(C.paidPaise)} already paid. Reverse or correct payments first.`);
-    refs.forEach(ref=>tx.update(ref,{status:"deleted",deletedAt:serverTimestamp(),deletedBy:S.user.uid,updatedAt:serverTimestamp(),updatedBy:S.user.uid}));
-    tx.update(cRef,{totalPaise:nextTotal,updatedAt:serverTimestamp(),updatedBy:S.user.uid});
-    tx.set(newNotifRef(),evt("loan_deleted",{customerId:id,message:`${active.length} products (${inr(sum)}) deleted together – ${C.name}`}));
-  });
-  toast(`Deleted ${active.length} products. History is preserved.`,"ok");
+  let deleted = 0, failed = 0, firstError = "";
+  for (const item of active) {
+    try {
+      const cRef = doc(db, "customers", id), lRef = doc(db, "loans", item.id);
+      await runTransaction(db, async tx => {
+        const [cs, ls] = await Promise.all([tx.get(cRef), tx.get(lRef)]);
+        if (!cs.exists() || cs.data().deleted) throw new UserError("Customer is not available.");
+        if (!ls.exists() || ls.data().status !== "active") throw new UserError("This product was already deleted or changed.");
+        const C = cs.data(), L = ls.data(), nextTotal = (C.totalPaise | 0) - L.totalPaise;
+        if (nextTotal < (C.paidPaise | 0)) throw new UserError(`Remaining products would total ${inr(nextTotal)}, less than ${inr(C.paidPaise)} already paid. Reverse or correct payments first.`);
+        tx.update(lRef, {status:"deleted",deletedAt:serverTimestamp(),deletedBy:S.user.uid,updatedAt:serverTimestamp(),updatedBy:S.user.uid});
+        tx.update(cRef, {totalPaise:nextTotal,updatedAt:serverTimestamp(),updatedBy:S.user.uid});
+        tx.set(newNotifRef(), evt("loan_deleted", {customerId:id,loanId:item.id,message:`${L.name} ${inr(L.totalPaise)} deleted – ${C.name}`}));
+      });
+      deleted++;
+    } catch (e) { failed++; if (!firstError) firstError = friendly(e); }
+  }
+  if (deleted) toast(`Deleted ${deleted} of ${active.length} products. History is preserved.`, "ok");
+  if (failed) toast(`${failed} product(s) could not be deleted. ${firstError || "Refresh and try again."}`, "bad");
 };
+
 
 /* ===== Receive payment ===== */
 ROUTES.pay = { data: true, back: true, parent: r => "customer/" + r.arg, title: "Receive payment", nav: "customers", render: renderPay };
@@ -2299,26 +2306,34 @@ ACT.delPay = async b => {
 };
 
 ACT.delAllPays = async () => {
-  const id=S.route?.name==="history"?S.route.arg:"";
-  const c=cust(id), active=hPays.filter(p=>p.status==="active");
-  if(!c||!active.length) return toast("No active payments to delete.");
-  if(active.length>450) return toast("Too many payments for one safe bulk operation. Delete them in smaller groups.","bad");
-  const total=active.reduce((sum,p)=>sum+(Number(p.amountPaise)||0),0);
-  if(!await askDlg({title:"Delete all payments?",msg:`Reverse all <b>${active.length}</b> active payments for <b>${esc(c.name)}</b>, totalling <b>${inr(total)}</b>? Each record stays in history as reversed, and the paid total decreases. Customer and loan records are not deleted.`,ok:"Delete all payments",danger:true})) return;
+  const id = S.route?.name === "history" ? S.route.arg : "";
+  const c = cust(id), active = hPays.filter(p => p.status === "active");
+  if (!c || !active.length) return toast("No active payments to delete.");
+  if (active.length > 450) return toast("Too many payments for one safe operation. Delete them in smaller groups.", "bad");
+  const total = active.reduce((sum, p) => sum + (Number(p.amountPaise) || 0), 0);
+  if (!await askDlg({title:"Delete all payments?",msg:`Reverse all <b>${active.length}</b> active payments for <b>${esc(c.name)}</b>, totalling <b>${inr(total)}</b>? Each record stays in history as reversed, and the paid total decreases. Customer and loan records are not deleted.`,ok:"Delete all payments",danger:true})) return;
   requireOnline();
-  const cRef=doc(db,"customers",id), refs=active.map(p=>doc(db,"payments",p.id));
-  await runTransaction(db,async tx=>{
-    const reads=await Promise.all([tx.get(cRef),...refs.map(ref=>tx.get(ref))]);
-    const cs=reads[0]; if(!cs.exists()) throw new UserError("Customer was not found.");
-    const C=cs.data(); let sum=0;
-    for(let i=0;i<refs.length;i++){const snap=reads[i+1];if(!snap.exists()||snap.data().status!=="active")throw new UserError("A payment changed. Refresh and try again.");sum+=Number(snap.data().amountPaise)||0;}
-    if((C.paidPaise|0)<sum) throw new UserError("Recorded paid total does not match these payments. No changes were made.");
-    refs.forEach(ref=>tx.update(ref,{status:"reversed",reversedAt:serverTimestamp(),reversedBy:S.user.uid,reversalReason:"Deleted together by admin"}));
-    tx.update(cRef,{paidPaise:(C.paidPaise|0)-sum,updatedAt:serverTimestamp(),updatedBy:S.user.uid});
-    tx.set(newNotifRef(),evt("payment_reversed",{customerId:id,message:`${active.length} payments (${inr(sum)}) reversed together – ${C.name}`}));
-  });
-  toast(`Deleted ${active.length} payments. Reversal history is preserved.`,"ok");
+  let reversed = 0, failed = 0, firstError = "";
+  for (const item of active) {
+    try {
+      const cRef = doc(db, "customers", id), pRef = doc(db, "payments", item.id);
+      await runTransaction(db, async tx => {
+        const [cs, ps] = await Promise.all([tx.get(cRef), tx.get(pRef)]);
+        if (!cs.exists()) throw new UserError("Customer was not found.");
+        if (!ps.exists() || ps.data().status !== "active") throw new UserError("This payment was already deleted or changed.");
+        const C = cs.data(), P = ps.data(), amount = P.amountPaise;
+        if ((C.paidPaise | 0) < amount) throw new UserError("Recorded paid total does not match this payment.");
+        tx.update(pRef, {status:"reversed",reversedAt:serverTimestamp(),reversedBy:S.user.uid,reversalReason:"Deleted by admin"});
+        tx.update(cRef, {paidPaise:(C.paidPaise | 0) - amount,updatedAt:serverTimestamp(),updatedBy:S.user.uid});
+        tx.set(newNotifRef(), evt("payment_reversed", {customerId:id,paymentId:item.id,message:`${inr(amount)} (${P.receiptNo || "payment"}) deleted – ${C.name}`}));
+      });
+      reversed++;
+    } catch (e) { failed++; if (!firstError) firstError = friendly(e); }
+  }
+  if (reversed) toast(`Deleted ${reversed} of ${active.length} payments. Reversal history is preserved.`, "ok");
+  if (failed) toast(`${failed} payment(s) could not be deleted. ${firstError || "Refresh and try again."}`, "bad");
 };
+
 
 /* ===== Recycle bin ===== */
 let RQ = "";
