@@ -2434,7 +2434,7 @@ ACT.customerQuickMessage = b => { const c=cust(b.dataset.id); if(!c || c.deleted
 const CM = { selectedId: "", search: "", editingId: "" };
 const CM_TPL = [["Payment reminder", "Payment Reminder", "Please visit Balappa Provision Store regarding your pending balance."], ["Thank you", "Thank You", "Thank you for your payment. We appreciate your trust in Balappa Provision Store."]];
 let cmHistory = [], cmHistoryUnsub = null, cmHistoryLoaded = false;
-ROUTES.sendmessage = { ptr: true, data: true, title: "Select customer", nav: "sendmessage", render: renderMessageCustomerSelect, paint: renderMessageCustomerSelect };
+ROUTES.sendmessage = { ptr: true, data: true, title: "Select customer", nav: "sendmessage", render: renderMessageCustomerSelect, paint: paintCmCustomers };
 ROUTES.sendmessagecompose = { ptr: true, data: true, back: true, parent: () => "sendmessage", title: "Send Message", nav: "sendmessage", render: renderSendMessage, paint: paintSendMessage };
 function renderMessageCustomerSelect() {
   CM.search = "";
