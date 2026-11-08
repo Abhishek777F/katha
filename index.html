@@ -463,9 +463,11 @@ html,body{overscroll-behavior-y:contain}
 .cdc-info .circ{flex:none;width:42px;height:42px;border-radius:50%;background:color-mix(in srgb,var(--ac1) 15%,transparent);display:flex;align-items:center;justify-content:center;color:var(--ac1)}
 .cdc-info b{display:block;font-size:.92rem;word-break:break-word}.cdc-info small{color:var(--mu);font-size:.76rem}
 .cdc-info .vdiv{width:1px;align-self:stretch;background:var(--ln)}
-.cdc-wa{display:flex;align-items:center;justify-content:center;gap:12px;margin-top:12px;min-height:54px;border-radius:18px;background:linear-gradient(90deg,#16A34A,#22C55E);color:#fff;font-weight:800;font-size:1.05rem;box-shadow:0 8px 20px rgba(34,197,94,.3);position:relative}
-.cdc-wa svg{width:30px;height:30px;fill:#fff}.cdc-wa .chev{position:absolute;right:16px}
-.cdc-wa.off{background:var(--card2);color:var(--mu);box-shadow:none;pointer-events:none}.cdc-wa.off svg{fill:var(--mu)}
+.cdc-actions{display:flex;align-items:center;justify-content:center;gap:18px;margin-top:12px}
+.cdc-action{width:48px;height:48px;min-width:48px;border:0;border-radius:50%;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--ac1),var(--ac2));color:#fff;box-shadow:0 7px 16px color-mix(in srgb,var(--ac1) 28%,transparent);cursor:pointer}
+.cdc-action .ms{font-size:22px}.cdc-action.wa{background:linear-gradient(135deg,#16A34A,#22C55E)}
+.cdc-action.wa svg{width:25px;height:25px;fill:#fff}
+.cdc-action.off{background:var(--card2);color:var(--mu);box-shadow:none;pointer-events:none}.cdc-action.wa.off svg{fill:var(--mu)}
 .rcard{position:relative;padding-bottom:76px;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
 .rbtn{position:absolute;right:14px;bottom:14px;width:52px;height:52px;border-radius:50%;border:0;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--ac1),var(--ac2));box-shadow:0 8px 18px color-mix(in srgb,var(--ac1) 40%,transparent)}
 .rbtn .ms{font-size:1.5rem}
@@ -2007,13 +2009,16 @@ function paintCustomer() {
     <div class="cdc-info"><div class="half"><div class="circ">${ic("call", 1)}</div><div><b>${esc(phoneFmt(c.mobile))}</b><small>Phone Number</small></div></div><div class="vdiv"></div>
       <div class="half"><div class="circ">${ic("location_on", 1)}</div><div><b>${esc(c.address || "No address")}</b><small>Location</small></div></div></div>
     ${c.notes ? `<p class="mu sm" style="margin-top:10px">${esc(c.notes)}</p>` : ""}
-    ${c.deleted ? "" : `<a class="cdc-wa ${n ? "" : "off"}" ${n ? `target="_blank" rel="noopener" href="https://wa.me/91${n}?text=${encodeURIComponent(waText(c))}"` : ""} aria-label="Chat on WhatsApp">${WA}<span>Chat on WhatsApp</span><span class="ms chev">chevron_right</span></a>`}</div>
+    ${c.deleted ? "" : `<div class="cdc-actions">
+      <button type="button" class="cdc-action" data-act="customerQuickMessage" data-id="${esc(id)}" aria-label="Send message" title="Send message">${ic("chat", 1)}</button>
+      <a class="cdc-action wa ${n ? "" : "off"}" ${n ? `target="_blank" rel="noopener" href="https://wa.me/91${n}?text=${encodeURIComponent(waText(c))}"` : ""} aria-label="Chat on WhatsApp" title="WhatsApp">${WA}</a>
+    </div>`}</div>
   <div class="grid" style="margin-top:12px">
     <div class="stat" style="text-align:center"><div class="k">Total amount</div><div class="v">${inr(cTotal(c))}</div></div>
     <div class="stat" style="text-align:center"><div class="k">Total paid</div><div class="v pos">${inr(cPaid(c))}</div></div>
     <div class="stat" style="text-align:center"><div class="k">Remaining balance</div><div class="v ${o > 0 ? "neg" : "pos"}">${inr(o)}</div></div>
     <div class="stat" style="text-align:center"><div class="k">Borrowed products</div><div class="v">${custLoans.length}</div></div></div>
-  <div class="sec"><h3>${ic("shopping_cart")} Borrowed products</h3></div>
+  <div class="sec" style="display:flex;align-items:center;justify-content:space-between;gap:10px"><h3>${ic("shopping_cart")} Borrowed products</h3>${custLoans.length && !c.deleted ? `<button class="ibtn binbtn" data-act="delAllLoans" aria-label="Delete all borrowed products" title="Delete all borrowed products">${ic("delete_sweep")}</button>` : ""}</div>
   ${custLoans.length ? custLoans.map(l => {
       const unitP = Math.round(l.totalPaise / Number(l.qty));
       return `<div class="prod" ${c.deleted ? "" : `data-hold="delLoan" data-id="${esc(l.id)}"`}>
@@ -2130,6 +2135,29 @@ ACT.delLoan = async b => {
   toast("Product deleted", "ok");
 };
 
+ACT.delAllLoans = async () => {
+  const id = S.route?.name === "customer" ? S.route.arg : "";
+  const c = cust(id), active = custLoans.filter(l => l.status === "active");
+  if (!c || c.deleted || !active.length) return toast("No active borrowed products to delete.");
+  if (active.length > 450) return toast("Too many products for one safe bulk operation. Delete them in smaller groups.", "bad");
+  const total = active.reduce((sum,l) => sum + (Number(l.totalPaise) || 0), 0);
+  if (!await askDlg({title:"Delete all borrowed products?",msg:`Move all <b>${active.length}</b> active product records for <b>${esc(c.name)}</b> to deleted status? Their history remains recoverable. The total decreases by <b>${inr(total)}</b>. This is blocked if the remaining total would be less than payments already received.`,ok:"Delete all products",danger:true})) return;
+  requireOnline();
+  const cRef=doc(db,"customers",id), refs=active.map(l=>doc(db,"loans",l.id));
+  await runTransaction(db,async tx=>{
+    const reads=await Promise.all([tx.get(cRef),...refs.map(ref=>tx.get(ref))]);
+    const cs=reads[0]; if(!cs.exists() || cs.data().deleted) throw new UserError("Customer is not available.");
+    const C=cs.data(); let sum=0;
+    for(let i=0;i<refs.length;i++){const snap=reads[i+1];if(!snap.exists()||snap.data().status!=="active")throw new UserError("A product changed. Refresh and try again.");sum+=Number(snap.data().totalPaise)||0;}
+    const nextTotal=(C.totalPaise|0)-sum;
+    if(nextTotal<(C.paidPaise|0)) throw new UserError(`Remaining products would total ${inr(nextTotal)}, less than ${inr(C.paidPaise)} already paid. Reverse or correct payments first.`);
+    refs.forEach(ref=>tx.update(ref,{status:"deleted",deletedAt:serverTimestamp(),deletedBy:S.user.uid,updatedAt:serverTimestamp(),updatedBy:S.user.uid}));
+    tx.update(cRef,{totalPaise:nextTotal,updatedAt:serverTimestamp(),updatedBy:S.user.uid});
+    tx.set(newNotifRef(),evt("loan_deleted",{customerId:id,message:`${active.length} products (${inr(sum)}) deleted together – ${C.name}`}));
+  });
+  toast(`Deleted ${active.length} products. History is preserved.`,"ok");
+};
+
 /* ===== Receive payment ===== */
 ROUTES.pay = { data: true, back: true, parent: r => "customer/" + r.arg, title: "Receive payment", nav: "customers", render: renderPay };
 function renderPay(r) {
@@ -2210,7 +2238,8 @@ function paintHistory() {
   const el = $("#hb"); if (!el || !ready()) return;
   const c = cust(S.route.arg); if (!c) { el.innerHTML = emptyBox("person_off", "Customer not found", ""); return; }
   const list = hPays.filter(p => hShowDel || p.status === "active"), nDel = hPays.filter(p => p.status !== "active").length;
-  el.innerHTML = `<div class="card"><div class="row">${cav(c, 48)}<div class="grow"><div class="b">${esc(c.name)}</div><div class="mu sm">${esc(c.id)}</div></div><div style="text-align:right"><div class="mu sm">Total paid</div><div class="b pos">${inr(cPaid(c))}</div></div></div></div>
+  const activeCount = hPays.filter(p => p.status === "active").length;
+  el.innerHTML = `<div class="card"><div class="row">${cav(c, 48)}<div class="grow"><div class="b">${esc(c.name)}</div><div class="mu sm">${esc(c.id)}</div><div class="mu sm">${activeCount} payment${activeCount === 1 ? "" : "s"}</div></div><div style="text-align:right"><div class="mu sm">Total paid</div><div class="b pos">${inr(cPaid(c))}</div></div></div></div>${activeCount ? `<div class="row" style="justify-content:flex-end;margin-top:10px"><button class="ibtn binbtn" data-act="delAllPays" aria-label="Delete all payments" title="Delete all payments">${ic("delete_sweep")}</button></div>` : ""}
     ${nDel ? `<div class="chips" style="margin-top:10px"><button class="${hShowDel ? "on" : ""}" data-act="togDel">${hShowDel ? "Hide" : "Show"} deleted (${nDel})</button></div>` : ""}
     <div style="margin-top:12px">${list.length ? list.map(p => {
       const rev = p.status !== "active";
@@ -2267,6 +2296,28 @@ ACT.delPay = async b => {
     tx.set(newNotifRef(), evt("payment_reversed", { customerId: p.customerId, paymentId: p.id, message: `${inr(amt)} (${p.receiptNo}) deleted – ${C.name}` }));
   });
   toast("Payment deleted", "ok");
+};
+
+ACT.delAllPays = async () => {
+  const id=S.route?.name==="history"?S.route.arg:"";
+  const c=cust(id), active=hPays.filter(p=>p.status==="active");
+  if(!c||!active.length) return toast("No active payments to delete.");
+  if(active.length>450) return toast("Too many payments for one safe bulk operation. Delete them in smaller groups.","bad");
+  const total=active.reduce((sum,p)=>sum+(Number(p.amountPaise)||0),0);
+  if(!await askDlg({title:"Delete all payments?",msg:`Reverse all <b>${active.length}</b> active payments for <b>${esc(c.name)}</b>, totalling <b>${inr(total)}</b>? Each record stays in history as reversed, and the paid total decreases. Customer and loan records are not deleted.`,ok:"Delete all payments",danger:true})) return;
+  requireOnline();
+  const cRef=doc(db,"customers",id), refs=active.map(p=>doc(db,"payments",p.id));
+  await runTransaction(db,async tx=>{
+    const reads=await Promise.all([tx.get(cRef),...refs.map(ref=>tx.get(ref))]);
+    const cs=reads[0]; if(!cs.exists()) throw new UserError("Customer was not found.");
+    const C=cs.data(); let sum=0;
+    for(let i=0;i<refs.length;i++){const snap=reads[i+1];if(!snap.exists()||snap.data().status!=="active")throw new UserError("A payment changed. Refresh and try again.");sum+=Number(snap.data().amountPaise)||0;}
+    if((C.paidPaise|0)<sum) throw new UserError("Recorded paid total does not match these payments. No changes were made.");
+    refs.forEach(ref=>tx.update(ref,{status:"reversed",reversedAt:serverTimestamp(),reversedBy:S.user.uid,reversalReason:"Deleted together by admin"}));
+    tx.update(cRef,{paidPaise:(C.paidPaise|0)-sum,updatedAt:serverTimestamp(),updatedBy:S.user.uid});
+    tx.set(newNotifRef(),evt("payment_reversed",{customerId:id,message:`${active.length} payments (${inr(sum)}) reversed together – ${C.name}`}));
+  });
+  toast(`Deleted ${active.length} payments. Reversal history is preserved.`,"ok");
 };
 
 /* ===== Recycle bin ===== */
@@ -2376,6 +2427,8 @@ ACT.clearAll = async () => {
   if (!await askDlg({ title: "Clear all notifications?", msg: "The list will be cleared and everything marked as read. The activity records themselves are kept for your audit trail.", ok: "Clear all", danger: true })) return;
   await markUnreadRead(); P.set("notifCleared", String(Date.now())); paintNotif(); toast("Notifications cleared", "ok");
 };
+
+ACT.customerQuickMessage = b => { const c=cust(b.dataset.id); if(!c || c.deleted) return toast("Customer is not available.","bad"); CM.selectedId=c.id; go("sendmessage"); };
 
 /* ===== Send one customer message ===== */
 const CM = { selectedId: "", search: "", editingId: "" };
