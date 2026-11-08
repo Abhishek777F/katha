@@ -2595,7 +2595,16 @@ ACT.cmEdit = async b => {
   const c = cust(m.customerId);
   if (!c || c.deleted) return toast("This customer is not available.", "bad");
   CM.editingId = id; CM.selectedId = c.id;
-  go("sendmessagecompose/" + encodeURIComponent(c.id));
+  if (S.route?.name === "sendmessagecompose" && S.route.arg === c.id) {
+    $("#cmTitle").value = m.title || "";
+    $("#cmBody").value = m.body || "";
+    $("#cmSend").innerHTML = `${ic("save")} Save changes`;
+    updateCmSend();
+    $("#cmComposeCard")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    $("#cmTitle")?.focus({ preventScroll: true });
+  } else {
+    go("sendmessagecompose/" + encodeURIComponent(c.id));
+  }
   toast("Edit the message fields, then save changes.");
 };
 function paintSendMessage() { updateCmSend(); paintCmHistory(); }
