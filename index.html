@@ -2428,20 +2428,27 @@ ACT.clearAll = async () => {
   await markUnreadRead(); P.set("notifCleared", String(Date.now())); paintNotif(); toast("Notifications cleared", "ok");
 };
 
-ACT.customerQuickMessage = b => { const c=cust(b.dataset.id); if(!c || c.deleted) return toast("Customer is not available.","bad"); CM.selectedId=c.id; go("sendmessage"); };
+ACT.customerQuickMessage = b => { const c=cust(b.dataset.id); if(!c || c.deleted) return toast("Customer is not available.","bad"); CM.selectedId=c.id; CM.editingId=""; go("sendmessagecompose/"+encodeURIComponent(c.id)); };
 
 /* ===== Send one customer message ===== */
 const CM = { selectedId: "", search: "", editingId: "" };
 const CM_TPL = [["Payment reminder", "Payment Reminder", "Please visit Balappa Provision Store regarding your pending balance."], ["Thank you", "Thank You", "Thank you for your payment. We appreciate your trust in Balappa Provision Store."]];
 let cmHistory = [], cmHistoryUnsub = null, cmHistoryLoaded = false;
-ROUTES.sendmessage = { ptr: true, data: true, title: "Send Message", nav: "sendmessage", render: renderSendMessage, paint: paintSendMessage };
-function renderSendMessage() {
-  CM.selectedId = ""; CM.search = ""; CM.editingId = ""; cmHistoryLoaded = false; cmHistory = [];
+ROUTES.sendmessage = { ptr: true, data: true, title: "Select customer", nav: "sendmessage", render: renderMessageCustomerSelect, paint: renderMessageCustomerSelect };
+ROUTES.sendmessagecompose = { ptr: true, data: true, back: true, parent: () => "sendmessage", title: "Send Message", nav: "sendmessage", render: renderSendMessage, paint: paintSendMessage };
+function renderMessageCustomerSelect() {
+  CM.search = "";
+  $("#view").innerHTML = `<div class="cm-hero"><div class="hi">${ic("send")}</div><div><h3>Send a personal message</h3><p>Select one customer. Only that customer will receive it.</p></div></div><div class="cm-step"><div class="cm-sh"><span class="cm-n">1</span><div><h4>Choose customer</h4><small>Search by name, customer ID or mobile</small></div></div><div class="search">${ic("search",1)}<input id="cmSearch" type="search" autocomplete="off" placeholder="Search customers…"></div><div id="cmCustomerResults" class="cm-res"></div></div>`;
+  $("#cmSearch").addEventListener("input",e=>{CM.search=e.target.value;paintCmCustomers();});
+  paintCmCustomers();
+}
+function renderSendMessage(r) {
+  const c = cust(r.arg);
+  if (!c || c.deleted) { $("#view").innerHTML = emptyBox("person_off","Customer not available","Choose an active customer.",`<button class="btn" data-go="sendmessage">Choose customer</button>`); return; }
+  CM.selectedId = c.id; CM.search = ""; cmHistoryLoaded = false; cmHistory = [];
   $("#view").innerHTML = `
     <div class="cm-hero"><div class="hi">${ic("send")}</div><div><h3>Send a personal message</h3><p>Reaches one customer's My Katha app only</p></div></div>
-    <div class="cm-step"><div class="cm-sh"><span class="cm-n">1</span><div><h4>Choose customer</h4><small>Search by name, customer ID or mobile</small></div></div>
-      <div id="cmFind"><div class="search">${ic("search", 1)}<input id="cmSearch" type="search" autocomplete="off" placeholder="Search customers…"></div><div id="cmCustomerResults" class="cm-res"></div></div>
-      <div id="cmSelected"></div></div>
+    <div class="cm-step"><div class="cm-sh"><span class="cm-n">1</span><div><h4>Selected customer</h4><small>Confirm the recipient before sending</small></div></div><div class="cm-sel">${cav(c,48)}<div class="grow"><b>${esc(c.name)}</b><div class="sub">ID: ${esc(c.id)} · ${esc(c.mobile || "No mobile")}</div></div><button type="button" class="btn sm ghost" data-act="clearMessageCustomer">Change</button></div></div>
     <div class="cm-step cm-lock" id="cmComposeCard"><div class="cm-sh"><span class="cm-n">2</span><div><h4>Write message</h4><small>Sender name: Abhi</small></div></div>
       <div class="cm-tpl">${CM_TPL.map((t, i) => `<button type="button" data-act="cmTemplate" data-i="${i}">${t[0]}</button>`).join("")}</div>
       <label class="fld"><span>Title</span><input id="cmTitle" maxlength="80" placeholder="e.g. Payment Reminder" autocomplete="off"></label>
@@ -2452,14 +2459,13 @@ function renderSendMessage() {
       <button class="btn pri block" id="cmSend" data-act="sendCustomerMessage" style="margin-top:14px" disabled>${ic("send")} Send message</button>
       <div class="cm-hint">${ic("verified_user", 1)}<span>You'll confirm before sending. Customer, loan and payment records are never changed.</span></div></div>
     <div class="sec"><div><h3>Sent message history</h3><div class="mu sm">Latest 30 customer messages</div></div><button class="ibtn binbtn" data-act="cmClearAll" aria-label="Clear all messages">${ic("delete")}</button></div><p class="mu sm" style="margin:0 2px 10px">Swipe right to permanently delete · Hold a pending custom message to edit</p><div id="cmHistory">${loading()}</div>`;
-  $("#cmSearch").addEventListener("input", e => { CM.search = e.target.value; paintCmCustomers(); });
   $("#cmTitle").addEventListener("input", updateCmSend);
   $("#cmBody").addEventListener("input", updateCmSend);
   cmSwipe($("#cmHistory"));
-  paintCmCustomers(); paintCmSelected();
+  paintCmHistory();
   if (cmHistoryUnsub) cmHistoryUnsub();
   cmHistoryUnsub = onSnapshot(query(collection(db, "customerNotifications"), orderBy("createdAt", "desc"), limit(30)),
-    snap => { cmHistory = snap.docs.map(d => ({ id: d.id, ...d.data() })); cmHistoryLoaded = true; paintCmHistory(); },
+    snap => { cmHistory = snap.docs.map(d => ({ id: d.id, ...d.data() })); cmHistoryLoaded = true; paintCmHistory(); if (CM.editingId) { const m = cmHistory.find(x => x.id === CM.editingId); if (m && m.customerId === CM.selectedId && cmCanEdit(m)) { $("#cmTitle").value = m.title || ""; $("#cmBody").value = m.body || ""; $("#cmSend").innerHTML = `${ic("save")} Save changes`; updateCmSend(); } } },
     err => { cmHistoryLoaded = true; const el = $("#cmHistory"); if (el) el.innerHTML = `<div class="msg">${esc(friendly(err))}</div>`; });
   pageUnsubs.push(() => { if (cmHistoryUnsub) cmHistoryUnsub(); cmHistoryUnsub = null; });
 }
@@ -2483,8 +2489,8 @@ function updateCmSend() {
   if ($("#cmPvT")) { $("#cmPvT").textContent = t.trim() || "Message title"; $("#cmPvB").textContent = bd.trim() || "Your message will appear here."; }
   const b = $("#cmSend"); if (b && !b.dataset.busy) b.disabled = !(CM.selectedId && t.trim() && bd.trim());
 }
-ACT.selectMessageCustomer = b => { const c = cust(b.dataset.id); if (!c || c.deleted) return toast("This customer is not available.", "bad"); CM.selectedId = c.id; paintCmSelected(); setTimeout(() => $("#cmTitle")?.focus(), 50); };
-ACT.clearMessageCustomer = () => { CM.selectedId = ""; paintCmSelected(); paintCmCustomers(); };
+ACT.selectMessageCustomer = b => { const c = cust(b.dataset.id); if (!c || c.deleted) return toast("This customer is not available.", "bad"); CM.selectedId = c.id; CM.editingId = ""; go("sendmessagecompose/" + encodeURIComponent(c.id)); };
+ACT.clearMessageCustomer = () => { CM.selectedId = ""; CM.editingId = ""; go("sendmessage"); };
 ACT.cmTemplate = b => { const t = CM_TPL[+b.dataset.i]; if (!t) return; $("#cmTitle").value = t[1]; $("#cmBody").value = t[2]; updateCmSend(); };
 ACT.sendCustomerMessage = b => lock(b, async () => {
   requireOnline(); const c = CM.selectedId ? cust(CM.selectedId) : null;
@@ -2517,7 +2523,7 @@ ACT.sendCustomerMessage = b => lock(b, async () => {
     catch (error) { console.warn("Immediate customer notification failed; GitHub fallback will retry:", error); }
     toast(sentImmediately ? ("Notification sent to " + c.name) : ("Message queued for " + c.name + "; backup will retry if needed."), "ok");
   }
-  $("#cmTitle").value = ""; $("#cmBody").value = ""; CM.selectedId = ""; CM.search = ""; $("#cmSearch").value = ""; paintCmCustomers(); paintCmSelected(); paintCmHistory();
+  $("#cmTitle").value = ""; $("#cmBody").value = ""; paintCmHistory();
 }).finally(updateCmSend);
 const CM_ST = { pending: ["Pending", "schedule", ""], sent: ["Sent", "check_circle", "sent"], failed: ["Failed", "error", "failed"], no_tokens: ["No app device", "phone_android", "warn"] };
 const CMDIS = () => { try { return new Set(JSON.parse(P.get("cmDis", "[]"))); } catch { return new Set(); } };
@@ -2589,15 +2595,10 @@ ACT.cmEdit = async b => {
   const c = cust(m.customerId);
   if (!c || c.deleted) return toast("This customer is not available.", "bad");
   CM.editingId = id; CM.selectedId = c.id;
-  $("#cmTitle").value = m.title || "";
-  $("#cmBody").value = m.body || "";
-  $("#cmSend").innerHTML = `${ic("save")} Save changes`;
-  paintCmSelected(); updateCmSend();
-  $("#cmComposeCard")?.scrollIntoView({ behavior: "smooth", block: "center" });
-  $("#cmTitle")?.focus({ preventScroll: true });
+  go("sendmessagecompose/" + encodeURIComponent(c.id));
   toast("Edit the message fields, then save changes.");
 };
-function paintSendMessage() { paintCmCustomers(); paintCmSelected(); paintCmHistory(); }
+function paintSendMessage() { updateCmSend(); paintCmHistory(); }
 
 /* ===== Reports ===== */
 const RTYPES = [["balances", "Customer balances", "account_balance_wallet", "Who owes how much today"], ["products", "Borrowed products", "shopping_cart", "Every product given on credit"], ["payments", "Payments received", "payments", "All cash you collected"],
