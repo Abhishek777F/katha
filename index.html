@@ -2100,6 +2100,7 @@ async function saveLoan(ref, cid, f, editing) {
         customerName: C.name,
         title: "New loan added",
         body: `${f.name} · ${fmtQty(f.qty, f.unit)} · ${inr(f.totalPaise)} added to your account.`,
+        productIcon: unitIcon(f.unit),
         senderName: "Abhi",
         type: "loan_created",
         status: "pending",
