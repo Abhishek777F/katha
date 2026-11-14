@@ -2584,7 +2584,7 @@ ACT.shareReceipt = async () => {
     "Date: " + fmtDT(p.paymentDate,p.time,p.createdAt),
     "Method: " + (p.method || "Not recorded"),
     "Status: " + (p.status === "active" ? "Received" : "Reversed")
-  ].join("\\n");
+  ].join("\n");
   try {
     if (navigator.share) await navigator.share({title:"My Katha receipt " + (p.receiptNo || ""),text:message});
     else if (navigator.clipboard && navigator.clipboard.writeText) { await navigator.clipboard.writeText(message); toast("Receipt details copied","ok"); }
