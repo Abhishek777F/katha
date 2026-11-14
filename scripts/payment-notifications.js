@@ -113,6 +113,14 @@ async function main() {
         skipped++;
         continue;
       }
+      // A missing admin token is a waiting condition, not a workflow failure.
+      // Keep the payment eligible: a later run will retry automatically once
+      // an active admin registers a push token.
+      if (!tokens.length && deliverySnap.exists
+          && deliverySnap.get("status") === "no_tokens") {
+        skipped++;
+        continue;
+      }
 
       const amountPaise = Number(payment.amountPaise);
       if (!Number.isFinite(amountPaise) || amountPaise <= 0) {
@@ -141,8 +149,8 @@ async function main() {
           receiptNo,
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         }, { merge: true });
-        failures++;
-        console.error(`Payment ${paymentDoc.id}: no active administrator tokens.`);
+        skipped++;
+        console.warn(`Payment ${paymentDoc.id}: waiting for an active administrator push token; it will retry after token registration.`);
         continue;
       }
 
