@@ -1982,7 +1982,7 @@ function renderDeviceContacts() {
   const normalizeIndianMobile = values => {
     for (const raw of (Array.isArray(values) ? values : [values])) {
       const text = String(raw || "").trim();
-      let digits = text.replace(/\\D/g, "");
+      let digits = text.replace(/\D/g, "");
       if (digits.length === 12 && digits.startsWith("91")) digits = digits.slice(2);
       else if (digits.length === 11 && digits.startsWith("0")) digits = digits.slice(1);
       if (digits.length === 10 && /^[6-9][0-9]{9}$/.test(digits)) return digits;
@@ -1991,7 +1991,7 @@ function renderDeviceContacts() {
   };
 
   const paint = () => {
-    $("#deviceContactCount").textContent = deviceContactResults.length + (deviceContactResults.length === 1 ? " selected" : " selected");
+    $("#deviceContactCount").textContent = deviceContactResults.length + " selected";
     if (!deviceContactResults.length) {
       list.innerHTML = `<div class="contact-empty">
         <div class="contact-empty-icon">${ic("user-round-search", 1)}</div>
