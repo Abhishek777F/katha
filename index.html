@@ -1582,7 +1582,7 @@ function netbar() {
 addEventListener("online", () => { netbar(); toast("Back online", "ok"); }); addEventListener("offline", netbar);
 
 /* ---------- router, drawer, bottom nav ---------- */
-const MENU = [["home", "home", "Home"], ["customers", "group", "Customers"], ["sendmessage", "send", "Send Message"], ["reports", "bar_chart", "Reports"], ["recycle", "delete", "Recycle bin"], ["notifications", "notifications", "Notifications"], ["settings", "settings", "Settings"]];
+const MENU = [["home", "home", "Home"], ["customers", "group", "Customers"], ["sendmessage", "send", "Send Message"], ["receipts", "receipt_long", "Receipts"], ["reports", "bar_chart", "Reports"], ["recycle", "delete", "Recycle bin"], ["notifications", "notifications", "Notifications"], ["settings", "settings", "Settings"]];
 const ROUTES = {};
 let deviceContactResults = [];
 window.__contactReturnRoute = "addcustomer";
@@ -2415,6 +2415,8 @@ async function receivePayment(p) {
 
 /* ===== Payment history (per customer) ===== */
 ROUTES.history = { data: true, ptr: true, back: true, parent: r => "customer/" + r.arg, title: "Payment history", nav: "customers", render: renderHistory, paint: paintHistory };
+ROUTES.receipts = { data: true, ptr: true, back: false, title: "Receipts", nav: "receipts", render: renderReceipts };
+ROUTES.receipt = { data: true, ptr: false, back: true, parent: () => "receipts", title: "Payment receipt", nav: "receipts", render: renderReceiptDetail };
 let hPays = [], hShowDel = false;
 function renderHistory(r) {
   hPays = []; hShowDel = false;
@@ -2436,12 +2438,162 @@ function paintHistory() {
         <div class="r1"><div class="tint" style="background:${rev ? "#EC489926" : "#06B6D426"}"><span class="ms" style="color:${rev ? "#EC4899" : "#06B6D4"}">${rev ? "undo" : "payments"}</span></div>
         <div class="grow"><div class="nm" style="${rev ? "text-decoration:line-through" : ""}">${inr(p.amountPaise)}</div></div>
         ${rev ? pill("Deleted", "bad") : `<button class="eic" data-act="editPay" data-id="${esc(p.id)}" aria-label="Edit">${ic("edit", 1)}</button>`}</div>
-        <div class="meta"><span>${ic("schedule", 1)}${esc(fmtDT(p.paymentDate, p.time, p.createdAt))}</span><span>${ic("receipt_long", 1)}${esc(p.receiptNo || "—")}</span>${p.notes ? `<span>${ic("notes", 1)}${esc(p.notes)}</span>` : ""}</div></div>`;
+        <div class="meta"><span>${ic("schedule", 1)}${esc(fmtDT(p.paymentDate, p.time, p.createdAt))}</span><span>${ic("receipt_long", 1)}${esc(p.receiptNo || "—")}</span>${p.notes ? `<span>${ic("notes", 1)}${esc(p.notes)}</span>` : ""}<button class="btn ghost sm" data-go="receipt/${encodeURIComponent(p.id)}" style="margin-left:auto">View receipt</button></div></div>`;
     }).join("") : emptyBox("receipt_long", "No payments yet", "Payments you receive will be listed here.")}</div>`;
 }
 ACT.togDel = () => { hShowDel = !hShowDel; paintHistory(); };
 const findPay = id => hPays.find(p => p.id === id);
 function printHTML(html) { $("#printArea").innerHTML = html; setTimeout(() => print(), 50); }
+
+/* ===== Premium receipt centre (Design 1: emerald + gold) ===== */
+let allReceiptPays = [], activeReceipt = null, receiptQuery = "";
+function receiptShop() {
+  const info = shopInfo();
+  return { name: info.shop || "My Katha", owner: info.owner || "", phone: info.phone || "", address: info.address || "" };
+}
+function receiptMoneyRow(label, value, cls) {
+  return '<div class="rcpt-row"><span>' + esc(label) + '</span><b class="' + (cls || '') + '">' + esc(value) + '</b></div>';
+}
+function receiptDocumentHTML(p, c) {
+  const shop = receiptShop();
+  const active = p.status === "active";
+  const receiptNo = p.receiptNo || "Receipt number unavailable";
+  const customerName = c && c.name ? c.name : (p.customerId || "Customer unavailable");
+  const currentBalance = c && Number.isFinite(Number(c.totalPaise)) && Number.isFinite(Number(c.paidPaise))
+    ? inr(Math.max(0, (Number(c.totalPaise) || 0) - (Number(c.paidPaise) || 0)))
+    : "Not available";
+  const dateText = fmtDT(p.paymentDate, p.time, p.createdAt);
+  const statusText = active ? "PAYMENT RECEIVED" : "PAYMENT REVERSED";
+  return '<article class="mk-receipt">' +
+    '<header class="mk-receipt-head">' +
+      '<div class="mk-brand"><div><div class="mk-brand-name">MY KATHA</div><div class="mk-shop-name">' + esc(shop.name) + '</div></div><div class="mk-brand-mark">₹</div></div>' +
+      '<div class="mk-gold-rule"></div><div class="mk-success"><div class="mk-check">' + (active ? '✓' : '!') + '</div>' +
+      '<div class="mk-status">' + statusText + '</div><div class="mk-amount">' + esc(inr(p.amountPaise || 0)) + '</div>' +
+      '<div class="mk-subtitle">' + (active ? 'Payment received successfully' : 'This payment has been reversed') + '</div></div>' +
+    '</header><section class="mk-receipt-body">' +
+      '<div class="mk-receipt-no"><span>RECEIPT NUMBER</span><b>' + esc(receiptNo) + '</b></div>' +
+      '<div class="mk-section">' +
+        receiptMoneyRow("Customer", customerName) +
+        receiptMoneyRow("Customer ID", p.customerId || "Not available") +
+        receiptMoneyRow("Payment date", dateText) +
+        receiptMoneyRow("Payment method", p.method || "Not recorded") +
+        (p.notes ? receiptMoneyRow("Notes", p.notes) : "") +
+      '</div><div class="mk-section"><h3>ACCOUNT SUMMARY</h3>' +
+        receiptMoneyRow("Payment received", inr(p.amountPaise || 0), "mk-green") +
+        receiptMoneyRow("Current outstanding balance", currentBalance) +
+        '<p class="mk-balance-note">Current balance is shown from the live customer ledger. It is not a historical balance snapshot from the payment date.</p>' +
+      '</div><div class="mk-thanks"><div class="mk-shield">✓</div>' +
+        '<strong>' + (active ? 'Thank you for your payment!' : 'Payment reversal recorded') + '</strong>' +
+        '<span>Computer-generated payment receipt</span></div>' +
+      '<footer class="mk-receipt-foot"><span>' + esc(shop.name) + '</span>' +
+        (shop.address ? '<span>' + esc(shop.address) + '</span>' : '') +
+        (shop.phone ? '<span>' + esc(shop.phone) + '</span>' : '') +
+        '<small>Keep this receipt for your records · Reference: ' + esc(p.id) + '</small></footer>' +
+    '</section></article>';
+}
+function receiptStyles() {
+  return '<style>' +
+    '.mk-receipt{width:100%;max-width:760px;margin:0 auto;background:#fff;color:#17211d;border-radius:26px;overflow:hidden;border:1px solid rgba(12,62,48,.12);box-shadow:0 18px 50px rgba(0,0,0,.18);font-family:Manrope,Arial,sans-serif}' +
+    '.mk-receipt-head{padding:28px 30px 30px;background:linear-gradient(145deg,#0b3028,#10513f 62%,#17624b);color:#fff}' +
+    '.mk-brand{display:flex;align-items:center;justify-content:space-between;gap:14px}.mk-brand-name{font-size:25px;font-weight:900;letter-spacing:.08em}' +
+    '.mk-shop-name{font-size:13px;color:#d4e9df;margin-top:3px;letter-spacing:.04em}.mk-brand-mark{width:48px;height:48px;border:1px solid #c9aa65;border-radius:15px;display:grid;place-items:center;color:#e6cc8d;font-size:27px;font-weight:800}' +
+    '.mk-gold-rule{height:1px;background:linear-gradient(90deg,transparent,#d7bd7d,transparent);margin:24px 0}.mk-success{text-align:center}' +
+    '.mk-check{width:48px;height:48px;margin:0 auto 12px;border:2px solid #a8e4c7;border-radius:50%;display:grid;place-items:center;color:#b8f0d2;font-size:30px;font-weight:800}' +
+    '.mk-status{font-size:18px;font-weight:900;letter-spacing:.045em}.mk-amount{font-size:40px;font-weight:900;letter-spacing:-.04em;margin:10px 0 3px}.mk-subtitle{color:#cce5d9;font-size:14px}' +
+    '.mk-receipt-body{padding:25px 30px 26px}.mk-receipt-no{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:0 0 19px;border-bottom:1px solid #e7ece8}' +
+    '.mk-receipt-no span{font-size:12px;color:#77837c;font-weight:700;letter-spacing:.05em}.mk-receipt-no b{font-size:20px;color:#173d30;overflow-wrap:anywhere;text-align:right}' +
+    '.mk-section{padding:17px 0;border-bottom:1px solid #e7ece8}.mk-section h3{font-size:16px;margin:0 0 8px;color:#173d30;letter-spacing:.025em}' +
+    '.rcpt-row{display:flex;justify-content:space-between;gap:18px;padding:9px 0;font-size:14px;align-items:flex-start}.rcpt-row span{color:#748078;flex:1;min-width:0}.rcpt-row b{color:#1b2821;text-align:right;max-width:60%;overflow-wrap:anywhere}.rcpt-row b.mk-green{color:#14834f}' +
+    '.mk-balance-note{font-size:11px;line-height:1.5;color:#78847d;margin:8px 0 0}.mk-thanks{margin-top:20px;padding:20px 14px;border-radius:18px;background:#f1f5f1;text-align:center;display:flex;flex-direction:column;align-items:center;gap:6px}' +
+    '.mk-shield{width:30px;height:30px;border:2px solid #198451;border-radius:10px;color:#198451;font-weight:900;display:grid;place-items:center}.mk-thanks strong{font-size:17px;color:#1d3026}.mk-thanks span{font-size:12px;color:#78847d}' +
+    '.mk-receipt-foot{display:flex;flex-direction:column;gap:4px;text-align:center;padding:17px 0 0;color:#66736b;font-size:11px}.mk-receipt-foot small{margin-top:8px;color:#8a948e}' +
+    '.receipt-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}' +
+    '@media(max-width:560px){.mk-receipt-head{padding:22px 19px}.mk-receipt-body{padding:20px 19px}.mk-amount{font-size:34px}.mk-receipt-no b{font-size:17px}.rcpt-row{font-size:13px;gap:10px}}' +
+    '@media print{@page{size:A4;margin:12mm}.mk-receipt{max-width:none;border:0;border-radius:0;box-shadow:none;break-inside:avoid}.mk-receipt-head,.mk-thanks{-webkit-print-color-adjust:exact;print-color-adjust:exact}}' +
+  '</style>';
+}
+function renderReceipts() {
+  const root = $("#view");
+  root.innerHTML = '<div class="gap"><div class="card"><div class="row"><div class="grow"><div class="b">Payment receipts</div><div class="mu sm">Find and reopen any recorded payment receipt</div></div><span class="ms" style="font-size:28px;color:#c9aa65">receipt_long</span></div>' +
+    '<div class="search" style="margin-top:14px"><span class="ms">search</span><input id="receiptSearch" type="search" placeholder="Search receipt no., customer or ID" autocomplete="off"></div></div><div id="receiptList">' + loading() + '</div></div>';
+  const input = $("#receiptSearch");
+  input.value = receiptQuery;
+  input.addEventListener("input", () => { receiptQuery = input.value.trim().toLowerCase(); paintReceipts(); });
+  pageUnsubs.push(onSnapshot(collection(db, "payments"), snap => {
+    allReceiptPays = snap.docs.map(d => ({ id:d.id, ...d.data() })).sort((a,b) =>
+      (b.paymentDate || "").localeCompare(a.paymentDate || "") ||
+      (b.time || "").localeCompare(a.time || "") ||
+      tsMs(b.createdAt) - tsMs(a.createdAt));
+    paintReceipts();
+  }, error => { const el=$("#receiptList"); if(el) el.innerHTML='<div class="msg">' + esc(friendly(error)) + '</div>'; }));
+}
+function paintReceipts() {
+  const el = $("#receiptList"); if (!el) return;
+  const q = receiptQuery;
+  const list = allReceiptPays.filter(p => {
+    const c = cust(p.customerId), hay = [p.receiptNo,p.customerId,p.id,c && c.name,p.amountPaise].join(" ").toLowerCase();
+    return !q || hay.includes(q);
+  });
+  if (!list.length) { el.innerHTML = emptyBox("receipt_long", q ? "No matching receipts" : "No receipts yet", q ? "Try another receipt number or customer." : "Receipts appear here when payments are recorded."); return; }
+  el.innerHTML = list.map(p => {
+    const c = cust(p.customerId), reversed = p.status !== "active";
+    return '<button class="item" style="width:100%;text-align:left" data-go="receipt/' + encodeURIComponent(p.id) + '">' +
+      '<div class="av" style="background:rgba(201,170,101,.15);color:#b08d47"><span class="ms">receipt_long</span></div>' +
+      '<div class="grow" style="min-width:0;text-align:left"><div class="t">' + esc(p.receiptNo || "Receipt number unavailable") + '</div><div class="s">' +
+      esc((c && c.name) || p.customerId || "Customer") + ' · ' + esc(fmtDT(p.paymentDate,p.time,p.createdAt)) + '</div></div>' +
+      '<div class="r"><div class="a">' + inr(p.amountPaise || 0) + '</div><div class="s">' + (reversed ? pill("Reversed","bad") : pill("Received","ok")) + '</div></div></button>';
+  }).join("");
+}
+async function renderReceiptDetail(r) {
+  const root = $("#view");
+  root.innerHTML = loading();
+  try {
+    const paymentSnap = await getDoc(doc(db,"payments",r.arg));
+    if (!paymentSnap.exists()) { root.innerHTML = emptyBox("receipt_long","Receipt not found","The original payment record is unavailable.",'<button class="btn" data-go="receipts">Back to receipts</button>'); return; }
+    const p = {id:paymentSnap.id,...paymentSnap.data()};
+    let c = cust(p.customerId);
+    if (!c) {
+      const customerSnap = await getDoc(doc(db,"customers",p.customerId));
+      c = customerSnap.exists() ? {id:customerSnap.id,...customerSnap.data()} : null;
+    }
+    activeReceipt = {p,c};
+    root.innerHTML = '<div class="gap"><div class="row" style="justify-content:space-between"><div class="mu sm">Original Firestore payment record</div>' +
+      (p.status === "active" ? pill("Received","ok") : pill("Reversed","bad")) + '</div>' +
+      receiptStyles() + receiptDocumentHTML(p,c) +
+      '<div class="receipt-actions"><button class="btn pri" data-act="downloadReceipt"><span class="ms">download</span>Save / Print PDF</button>' +
+      '<button class="btn ghost" data-act="shareReceipt"><span class="ms">share</span>Share receipt</button></div>' +
+      '<div class="mu sm" style="text-align:center">PDF opens the device print dialog. Choose “Save as PDF” to download a PDF copy.</div></div>';
+  } catch (error) {
+    root.innerHTML = '<div class="msg">' + esc(friendly(error)) + '</div><button class="btn ghost" data-go="receipts">Back to receipts</button>';
+  }
+}
+ACT.downloadReceipt = () => {
+  if (!activeReceipt) return;
+  const item = activeReceipt;
+  printHTML(receiptStyles() + receiptDocumentHTML(item.p,item.c));
+};
+ACT.shareReceipt = async () => {
+  if (!activeReceipt) return;
+  const item = activeReceipt, p = item.p, c = item.c, shop = receiptShop();
+  const message = [
+    shop.name,
+    "PAYMENT RECEIPT",
+    "Receipt: " + (p.receiptNo || "Unavailable"),
+    "Customer: " + ((c && c.name) || p.customerId || "Unavailable"),
+    "Amount: " + inr(p.amountPaise || 0),
+    "Date: " + fmtDT(p.paymentDate,p.time,p.createdAt),
+    "Method: " + (p.method || "Not recorded"),
+    "Status: " + (p.status === "active" ? "Received" : "Reversed")
+  ].join("\\n");
+  try {
+    if (navigator.share) await navigator.share({title:"My Katha receipt " + (p.receiptNo || ""),text:message});
+    else if (navigator.clipboard && navigator.clipboard.writeText) { await navigator.clipboard.writeText(message); toast("Receipt details copied","ok"); }
+    else toast("Sharing is not supported by this browser.","bad");
+  } catch (error) {
+    if (!error || error.name !== "AbortError") toast(friendly(error),"bad");
+  }
+};
+
 ACT.editPay = b => {
   const p = findPay(b.dataset.id); if (!p) return;
   openSheet("Edit payment", `<div id="emsg" class="msg hide"></div>
