@@ -604,7 +604,19 @@ button,a,.item,.lrow,.tile,.seg,.chips button,.ibtn,.eic,.rbtn{touch-action:mani
 .phonebox{display:flex;align-items:center;background:var(--card2);border-radius:14px;border:1.5px solid transparent;overflow:hidden}
 .phonebox:focus-within{border-color:var(--ac1)}
 .phonebox .cc{padding:0 14px;font-weight:800;border-right:1px solid var(--ln);min-height:48px;display:flex;align-items:center;color:var(--ac2)}
-.phonebox input{flex:1;background:transparent!important;border:0!important;letter-spacing:.1em;font-weight:700;font-size:1.05rem}
+.phonebox input{flex:1;min-width:0;background:transparent!important;border:0!important;letter-spacing:.1em;font-weight:700;font-size:1.05rem}
+.contact-pick-btn{width:48px;min-width:48px;height:48px;border:0;border-left:1px solid var(--ln);background:transparent;color:var(--ac1);display:flex;align-items:center;justify-content:center;cursor:pointer}
+.contact-pick-btn .ms{font-size:1.55rem}
+.contact-page{display:grid;gap:14px}
+.contact-intro{padding:20px;text-align:center}
+.contact-intro .contact-hero-icon{width:68px;height:68px;border-radius:22px;margin:0 auto 12px;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--ac1),var(--ac2));color:#fff;box-shadow:var(--sh)}
+.contact-intro .contact-hero-icon .ms{font-size:2rem}
+.device-contact{display:flex;align-items:center;gap:12px;padding:13px;border:1px solid var(--ln);border-radius:16px;background:var(--card);margin-top:9px;cursor:pointer;text-align:left;width:100%;color:var(--tx)}
+.device-contact .dc-avatar{width:46px;height:46px;border-radius:15px;display:flex;align-items:center;justify-content:center;background:var(--card2);color:var(--ac1);font-weight:800;flex:none}
+.device-contact .grow{min-width:0}
+.device-contact .dc-name{font-weight:800;overflow-wrap:anywhere}
+.device-contact .dc-phone{font-size:.82rem;color:var(--mu);overflow-wrap:anywhere}
+.contact-note{font-size:.82rem;color:var(--mu);line-height:1.55}
 .cf-bar{position:fixed;left:0;right:0;bottom:0;z-index:35;display:grid;grid-template-columns:1fr 2fr;gap:10px;padding:12px 14px calc(12px + env(safe-area-inset-bottom));background:var(--card);border-top:1px solid var(--ln);box-shadow:0 -10px 24px rgba(0,0,0,.25)}
 @media (min-width:900px){.cf-bar{left:var(--side)}}
 
@@ -1552,6 +1564,8 @@ addEventListener("online", () => { netbar(); toast("Back online", "ok"); }); add
 /* ---------- router, drawer, bottom nav ---------- */
 const MENU = [["home", "home", "Home"], ["customers", "group", "Customers"], ["sendmessage", "send", "Send Message"], ["reports", "bar_chart", "Reports"], ["recycle", "delete", "Recycle bin"], ["notifications", "notifications", "Notifications"], ["settings", "settings", "Settings"]];
 const ROUTES = {};
+let deviceContactResults = [];
+window.__contactReturnRoute = "addcustomer";
 function parseHash() {
   const h = location.hash.replace(/^#\/?/, ""); const [p, qs] = h.split("?"); const [name, ...arg] = p.split("/");
   return { name: ROUTES[name] ? name : "home", arg: decodeURIComponent(arg.join("/")), q: new URLSearchParams(qs || "") };
@@ -1674,6 +1688,11 @@ function resetIdle() { clearTimeout(idleT); const m = +P.get("idle", "0"); if (!
 ["pointerdown", "keydown", "touchstart", "scroll"].forEach(ev => addEventListener(ev, resetIdle, { passive: true }));
 ACT.signout = async () => { closeSheet(); closeDrawer(); await signOut(auth); };
 ACT.addCustomer = () => go("addcustomer");
+ACT.openDeviceContacts = () => {
+  const r = S.route;
+  window.__contactReturnRoute = r?.name === "editcustomer" ? "editcustomer/" + r.arg : "addcustomer";
+  go("devicecontacts");
+};
 /* 3D press / hover tilt on cards */
 (() => {
   const SEL = ".hero,.stat,.tile,.cdc,.shophead,.cf-hero,.dprof,.setcard,.rt2,.sum,.lrow,.c3d";
@@ -1913,6 +1932,82 @@ function customerSheet(id) {
   });
 }
 ACT.editCustomer = b => go("editcustomer/" + b.dataset.id);
+/* Device contacts: the browser shares only contacts explicitly selected by the user. */
+ROUTES.devicecontacts = { back: true, parent: () => window.__contactReturnRoute || "addcustomer", title: "Device contacts", nav: "customers", render: renderDeviceContacts };
+function renderDeviceContacts() {
+  $("#view").innerHTML = `<div class="contact-page">
+    <div class="card contact-intro">
+      <div class="contact-hero-icon">${ic("contacts", 1)}</div>
+      <h3 style="font-size:1.2rem;margin-bottom:6px">Choose a device contact</h3>
+      <p class="mu sm">Select a contact from your phone. Only the details you choose will be shared with My Katha.</p>
+      <button class="btn pri block" id="deviceContactOpen" type="button" style="margin-top:16px">${ic("contact_phone")} Open phone contacts</button>
+      <p class="contact-note" id="deviceContactStatus" style="margin-top:12px">Your contacts are not uploaded or saved until you choose a contact and save the customer.</p>
+    </div>
+    <div class="card"><div class="row" style="justify-content:space-between"><h3>Selected contacts</h3><span class="pill info" id="deviceContactCount">0</span></div>
+      <div id="deviceContactList"><div class="empty" style="padding:24px 10px">${ic("contacts")}<h4>No contacts selected</h4><p>Tap “Open phone contacts” to choose contacts.</p></div></div>
+    </div>
+    <div class="card contact-note">Contact access depends on your browser. This feature works on supported Android browsers over HTTPS. If unavailable, enter the number manually.</div>
+  </div>`;
+  const status = $("#deviceContactStatus");
+  const list = $("#deviceContactList");
+  const paint = () => {
+    $("#deviceContactCount").textContent = String(deviceContactResults.length);
+    if (!deviceContactResults.length) {
+      list.innerHTML = `<div class="empty" style="padding:24px 10px">${ic("contacts")}<h4>No contacts selected</h4><p>Tap “Open phone contacts” to choose contacts.</p></div>`;
+      return;
+    }
+    list.innerHTML = deviceContactResults.map((c,i) => {
+      const name = c.name || "Unnamed contact";
+      const phone = c.tel || "";
+      return `<button type="button" class="device-contact" data-contact-index="${i}">
+        <span class="dc-avatar">${esc((name.trim()[0] || "?").toUpperCase())}</span>
+        <span class="grow"><span class="dc-name">${esc(name)}</span><br><span class="dc-phone">${esc(phone || "No phone number shared")}</span></span>
+        ${ic("chevron_right")}
+      </button>`;
+    }).join("");
+    $("[data-contact-index]", list).forEach(button => button.onclick = () => {
+      const selected = deviceContactResults[Number(button.dataset.contactIndex)];
+      if (!selected) return;
+      const digits = String(selected.tel || "").replace(/\\D/g, "");
+      const mobile = digits.length > 10 && digits.startsWith("91") ? digits.slice(-10) : digits.slice(-10);
+      if (!mobile || mobile.length !== 10 || !/^[6-9]/.test(mobile)) {
+        status.textContent = "This contact does not have a valid Indian 10-digit mobile number. Choose another contact or enter the number manually.";
+        return;
+      }
+      window.__pendingDeviceContact = { name: selected.name || "", mobile };
+      go(window.__contactReturnRoute || "addcustomer");
+    });
+  };
+  paint();
+  $("#deviceContactOpen").onclick = async ev => {
+    const button = ev.currentTarget;
+    if (!("contacts" in navigator) || !navigator.contacts || typeof navigator.contacts.select !== "function") {
+      status.textContent = "Your current browser does not support device contacts. Open this admin website in a supported Android version of Chrome, or enter the details manually.";
+      return;
+    }
+    button.disabled = true;
+    status.textContent = "Choose one or more contacts in the phone's contact picker.";
+    try {
+      const chosen = await navigator.contacts.select(["name", "tel"], { multiple: true });
+      deviceContactResults = (chosen || []).map(contact => ({
+        name: Array.isArray(contact.name) ? (contact.name[0] || "") : "",
+        tel: Array.isArray(contact.tel) ? (contact.tel[0] || "") : ""
+      })).filter(contact => contact.name || contact.tel);
+      paint();
+      status.textContent = deviceContactResults.length
+        ? "Tap a contact below to use its name and mobile number."
+        : "No contacts were selected. You can open phone contacts again.";
+    } catch (error) {
+      if (error && error.name === "AbortError") status.textContent = "Contact selection was cancelled.";
+      else {
+        console.error("Device contact picker failed:", error);
+        status.textContent = "Could not open phone contacts. Check that you are using a supported Android browser and try again.";
+      }
+    } finally {
+      button.disabled = false;
+    }
+  };
+}
 /* full-page add / edit customer */
 ROUTES.addcustomer = { data: true, back: true, parent: () => "customers", title: "Add customer", nav: "customers", render: () => customerPage(null) };
 ROUTES.editcustomer = { data: true, back: true, parent: r => "customer/" + r.arg, title: "Edit customer", nav: "customers", render: r => customerPage(r.arg) };
@@ -1928,7 +2023,7 @@ function customerPage(id) {
       <label class="fld" style="margin:0"><span>Full name *</span><input id="fName" maxlength="100" value="${esc(c?.name)}" autocomplete="off" placeholder="Customer name"></label></div>
     <div class="card cfsec"><h4>${ic("call", 1)} Contact</h4>
       <div class="fld" style="margin:0"><span>Mobile number (10 digits)</span>
-        <div class="phonebox"><span class="cc">+91</span><input id="fMob" type="tel" inputmode="numeric" maxlength="10" autocomplete="off" placeholder="9876543210" value="${esc(c?.mobile)}"></div>
+        <div class="phonebox"><span class="cc">+91</span><input id="fMob" type="tel" inputmode="numeric" maxlength="10" autocomplete="off" placeholder="9876543210" value="${esc(c?.mobile)}"><button class="contact-pick-btn" type="button" data-act="openDeviceContacts" aria-label="Choose from device contacts" title="Choose from device contacts">${ic("contacts", 1)}</button></div>
         <div class="row" style="justify-content:space-between"><small class="mu" id="mHint">Optional · used for WhatsApp</small><small class="mu b" id="mCnt">0/10</small></div></div></div>
     <div class="card cfsec"><h4>${ic("location_on", 1)} Address</h4>
       <label class="fld" style="margin:0"><span>Village / area / city</span><textarea id="fAddr" maxlength="300" placeholder="Address (optional)">${esc(c?.address)}</textarea></label></div>
@@ -1947,6 +2042,16 @@ function customerPage(id) {
     h.style.color = !d ? "" : ok ? "var(--ok)" : "var(--warn)";
   };
   mob.oninput = mobSync; mobSync();
+  if (window.__pendingDeviceContact) {
+    const picked = window.__pendingDeviceContact;
+    window.__pendingDeviceContact = null;
+    if (!c?.name && picked.name) nameEl.value = picked.name.slice(0, 100);
+    mob.value = picked.mobile;
+    mobSync();
+    const pickedName = nameEl.value.trim();
+    $("#cfNm").textContent = pickedName || (c ? c.name : "New customer");
+    $("#cfAv").textContent = pickedName ? letter(pickedName) : (c ? letter(c.name) : "+");
+  }
   nameEl.oninput = () => { const v = nameEl.value.trim(); $("#cfNm").textContent = v || (c ? c.name : "New customer"); $("#cfAv").textContent = v ? letter(v) : (c ? letter(c.name) : "+"); };
   let dirty = false; $$("#fName,#fMob,#fAddr,#fNotes").forEach(x => x.addEventListener("input", () => { dirty = true; }));
   $("#cfCancel").onclick = async () => {
