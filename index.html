@@ -607,28 +607,35 @@ button,a,.item,.lrow,.tile,.seg,.chips button,.ibtn,.eic,.rbtn{touch-action:mani
 .phonebox input{flex:1;min-width:0;background:transparent!important;border:0!important;letter-spacing:.1em;font-weight:700;font-size:1.05rem}
 .contact-pick-btn{width:48px;min-width:48px;height:48px;border:0;border-left:1px solid var(--ln);background:transparent;color:var(--ac1);display:flex;align-items:center;justify-content:center;cursor:pointer}
 .contact-pick-btn .ms{font-size:1.55rem}
-.contact-page{display:grid;gap:14px;padding-bottom:12px}
+.contact-page{display:grid;gap:16px;padding:4px 0 18px;min-width:0}
 .contact-hero-card{padding:24px 20px 20px;text-align:center;border:1px solid var(--ln);border-radius:24px;background:linear-gradient(145deg,var(--card),var(--card2));box-shadow:var(--sh)}
-.contact-intro .contact-hero-icon{width:72px;height:72px;border-radius:24px;margin:0 auto 13px;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--ac1),var(--ac2));color:#fff;box-shadow:0 12px 26px color-mix(in srgb,var(--ac1) 28%,transparent)}
-.contact-intro .contact-hero-icon .ms{font-size:2.15rem}
+.contact-intro .contact-hero-icon{width:68px;height:68px;border-radius:22px;margin:0 auto 13px;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--ac1),var(--ac2));color:#fff;box-shadow:0 12px 26px color-mix(in srgb,var(--ac1) 25%,transparent)}
+.contact-intro .contact-hero-icon .ms{font-size:2rem;text-transform:none}
 .contact-eyebrow{font-size:.68rem;letter-spacing:.13em;font-weight:900;color:var(--ac1)}
-.contact-selected-head{display:flex;align-items:center;justify-content:space-between;padding:4px 3px}
-.contact-selected-card{padding:10px}
-.contact-empty{min-height:185px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:9px;padding:22px;color:var(--mu)}
+.contact-hero-title{font-size:1.3rem;line-height:1.25;margin:8px 0}
+.contact-hero-copy{max-width:430px;margin:0 auto;color:var(--mu);font-size:.9rem;line-height:1.55}
+.contact-open-btn{display:flex!important;align-items:center;justify-content:center;gap:10px;min-height:54px;margin-top:18px;padding:12px 16px;white-space:normal}
+.contact-open-btn .ms{font-size:1.35rem;text-transform:none}
+.contact-note{font-size:.8rem;color:var(--mu);line-height:1.5;margin:12px 0 0}
+.contact-selected-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:4px 3px}
+.contact-selected-head h3{font-size:1.05rem;margin:4px 0 0}
+.contact-selected-card{padding:10px;min-width:0;overflow:hidden}
+.contact-empty{min-height:170px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:9px;padding:22px;color:var(--mu)}
 .contact-empty strong{font-size:1rem;color:var(--tx)}
 .contact-empty span{font-size:.83rem;line-height:1.5;max-width:290px}
-.contact-empty-icon{width:58px;height:58px;border-radius:19px;display:flex;align-items:center;justify-content:center;background:var(--card2);color:var(--ac1);font-size:1.7rem}
-.device-contact{display:flex;align-items:center;gap:12px;padding:14px;border:1px solid var(--ln);border-radius:17px;background:var(--card);margin:7px 0;cursor:pointer;text-align:left;width:100%;color:var(--tx);transition:transform .18s,border-color .18s}
-.device-contact:active{transform:scale(.985);border-color:var(--ac1)}
-.device-contact .dc-avatar{width:48px;height:48px;border-radius:16px;display:flex;align-items:center;justify-content:center;background:linear-gradient(145deg,var(--card2),var(--card));color:var(--ac1);font-weight:900;font-size:1.1rem;flex:none}
-.device-contact .grow{min-width:0}
-.device-contact .dc-name{font-weight:850;overflow-wrap:anywhere}
-.device-contact .dc-phone{display:block;font-size:.82rem;color:var(--mu);overflow-wrap:anywhere;margin-top:2px}
-.device-contact .dc-use{display:block;font-size:.72rem;color:var(--ac1);font-weight:750;margin-top:5px}
+.contact-empty-icon{width:56px;height:56px;border-radius:18px;display:flex;align-items:center;justify-content:center;background:var(--card2);color:var(--ac1);font-size:1.6rem}
+.device-contact{display:grid!important;grid-template-columns:48px minmax(0,1fr) 28px;align-items:center;gap:12px;width:100%;max-width:100%;min-width:0;box-sizing:border-box;padding:13px;border:1px solid var(--ln);border-radius:17px;background:var(--card);margin:7px 0;cursor:pointer;text-align:left;color:var(--tx);text-transform:none!important;white-space:normal!important;overflow:hidden;transition:transform .18s,border-color .18s}
+.device-contact:active{transform:scale(.99);border-color:var(--ac1)}
+.device-contact .dc-avatar{width:46px;height:46px;border-radius:15px;display:flex;align-items:center;justify-content:center;background:linear-gradient(145deg,var(--card2),var(--card));color:var(--ac1);font-weight:900;font-size:1.05rem;flex:none}
+.device-contact .dc-details{display:flex;flex-direction:column;gap:4px;min-width:0;width:100%;overflow:hidden}
+.device-contact .dc-name{display:block;font-size:.96rem;font-weight:800;color:var(--tx);line-height:1.3;overflow-wrap:anywhere;word-break:normal}
+.device-contact .dc-phone{display:block;font-size:.84rem;font-weight:500;color:var(--mu);line-height:1.35;white-space:normal;overflow-wrap:anywhere;word-break:break-word;font-variant-numeric:tabular-nums}
+.device-contact .dc-extra{font-size:.72rem;color:var(--mu)}
+.device-contact .dc-chevron{display:flex;align-items:center;justify-content:center;color:var(--mu);min-width:28px}
+.device-contact .dc-chevron .ms{font-size:1.35rem;text-transform:none;font-family:"Material Symbols Rounded"}
 .contact-privacy{display:flex;align-items:flex-start;gap:11px;padding:14px 15px;border-radius:17px;background:var(--card2);color:var(--mu);font-size:.8rem;line-height:1.5}
 .contact-privacy strong{color:var(--tx)}
 .contact-privacy-icon{color:var(--ok);font-size:1.25rem;flex:none}
-.contact-note{font-size:.82rem;color:var(--mu);line-height:1.55}
 #deviceContactOpen:disabled{opacity:.72;cursor:wait}
 .cf-bar{position:fixed;left:0;right:0;bottom:0;z-index:35;display:grid;grid-template-columns:1fr 2fr;gap:10px;padding:12px 14px calc(12px + env(safe-area-inset-bottom));background:var(--card);border-top:1px solid var(--ln);box-shadow:0 -10px 24px rgba(0,0,0,.25)}
 @media (min-width:900px){.cf-bar{left:var(--side)}}
@@ -1953,60 +1960,78 @@ function renderDeviceContacts() {
     && navigator.contacts
     && typeof navigator.contacts.select === "function";
 
-  $("#view").innerHTML = `<div class="contact-page">
-    <div class="contact-intro contact-hero-card">
-      <div class="contact-hero-icon">${ic("contacts", 1)}</div>
-      <div class="contact-eyebrow">MY KATHA · DEVICE CONTACTS</div>
-      <h3 style="font-size:1.28rem;margin:7px 0">Choose from your phone</h3>
-      <p class="mu sm" style="max-width:440px;margin:0 auto">Select a contact from your device. My Katha receives only the name and phone number you choose.</p>
-      <button class="btn pri block" id="deviceContactOpen" type="button" style="margin-top:18px">${ic("contact_phone")} Allow access & choose contact</button>
-      <p class="contact-note" id="deviceContactStatus" style="margin:12px 0 0">${supported ? "Your phone will open its contact chooser. Access is requested only when you tap this button." : "Contact selection is not available in this browser. Try the latest Chrome on Android, or enter the details manually."}</p>
-    </div>
-    <div class="contact-selected-head">
-      <div><div class="contact-eyebrow">YOUR SELECTION</div><h3 style="margin:3px 0 0">Choose a contact</h3></div>
-      <span class="pill info" id="deviceContactCount">0 selected</span>
-    </div>
-    <div class="card contact-selected-card">
-      <div id="deviceContactList"><div class="contact-empty">
-        <div class="contact-empty-icon">${ic("person_search", 1)}</div>
-        <strong>No contacts selected yet</strong>
-        <span>Tap “Allow access & choose contact” above. Your phone will show its contacts for you to choose from.</span>
-      </div></div>
-    </div>
-    <div class="contact-privacy"><span class="contact-privacy-icon">${ic("verified_user", 1)}</span><span><strong>Your privacy matters</strong><br>Contacts are not uploaded to Firebase. Only the contact you tap here is copied into the customer form. Your browser asks again each time you open the phone contact chooser.</span></div>
-  </div>`;
-
-  const status = $("#deviceContactStatus");
-  const list = $("#deviceContactList");
-
+  const contactName = value => {
+    const values = Array.isArray(value) ? value : [value];
+    return String(values.find(v => typeof v === "string" && v.trim()) || "").trim();
+  };
+  const contactPhones = value => (Array.isArray(value) ? value : [value])
+    .filter(v => typeof v === "string" && v.trim())
+    .map(v => v.trim());
   const normalizeIndianMobile = values => {
-    for (const raw of (Array.isArray(values) ? values : [values])) {
-      const text = String(raw || "").trim();
-      let digits = text.replace(/\D/g, "");
+    for (const raw of contactPhones(values)) {
+      let digits = raw.replace(/\\D/g, "");
       if (digits.length === 12 && digits.startsWith("91")) digits = digits.slice(2);
       else if (digits.length === 11 && digits.startsWith("0")) digits = digits.slice(1);
       if (digits.length === 10 && /^[6-9][0-9]{9}$/.test(digits)) return digits;
     }
     return "";
   };
+  const prettyPhone = raw => {
+    const digits = String(raw || "").replace(/\\D/g, "");
+    if (digits.length === 12 && digits.startsWith("91")) return "+91 " + digits.slice(2,7) + " " + digits.slice(7);
+    if (digits.length === 11 && digits.startsWith("0")) return digits.slice(0,1) + " " + digits.slice(1,6) + " " + digits.slice(6);
+    if (digits.length === 10) return digits.slice(0,5) + " " + digits.slice(5);
+    return raw;
+  };
 
+  $("#view").innerHTML = `<div class="contact-page">
+    <section class="contact-intro contact-hero-card">
+      <div class="contact-hero-icon">${ic("contacts", 1)}</div>
+      <div class="contact-eyebrow">MY KATHA · DEVICE CONTACTS</div>
+      <h3 class="contact-hero-title">Choose from your phone</h3>
+      <p class="contact-hero-copy">Select a contact from your device. Only the contact details you choose are shared with My Katha.</p>
+      <button class="btn pri block contact-open-btn" id="deviceContactOpen" type="button">${ic("contact_phone")}<span>Choose from phone contacts</span></button>
+      <p class="contact-note" id="deviceContactStatus">${supported ? "Your phone will ask which contacts you want to share." : "Contact selection is not supported in this browser. Try Chrome on Android or enter the details manually."}</p>
+    </section>
+    <div class="contact-selected-head">
+      <div><div class="contact-eyebrow">SELECTED CONTACTS</div><h3>Choose one to continue</h3></div>
+      <span class="pill info" id="deviceContactCount">0 selected</span>
+    </div>
+    <section class="card contact-selected-card">
+      <div id="deviceContactList"><div class="contact-empty">
+        <div class="contact-empty-icon">${ic("person_search", 1)}</div>
+        <strong>No contacts selected</strong>
+        <span>Choose contacts from your phone. They will appear here.</span>
+      </div></div>
+    </section>
+    <div class="contact-privacy"><span class="contact-privacy-icon">${ic("verified_user", 1)}</span><span><strong>Your privacy matters</strong><br>My Katha does not upload your address book. Only a contact you select and tap is copied into the customer form.</span></div>
+  </div>`;
+
+  const status = $("#deviceContactStatus");
+  const list = $("#deviceContactList");
   const paint = () => {
-    $("#deviceContactCount").textContent = deviceContactResults.length + " selected";
+    $("#deviceContactCount").textContent = deviceContactResults.length + (deviceContactResults.length === 1 ? " contact" : " contacts");
     if (!deviceContactResults.length) {
       list.innerHTML = `<div class="contact-empty">
         <div class="contact-empty-icon">${ic("person_search", 1)}</div>
-        <strong>No contacts selected yet</strong>
-        <span>Tap “Allow access & choose contact” above to open your phone contacts.</span>
+        <strong>No contacts selected</strong>
+        <span>Choose contacts from your phone. They will appear here.</span>
       </div>`;
       return;
     }
     list.innerHTML = deviceContactResults.map((c,i) => {
-      const name = c.name || "Unnamed contact";
-      const phone = (Array.isArray(c.tel) ? c.tel : [c.tel]).filter(Boolean).join(" · ");
-      return `<button type="button" class="device-contact" data-contact-index="${i}">
-        <span class="dc-avatar">${esc((name.trim()[0] || "?").toUpperCase())}</span>
-        <span class="grow"><span class="dc-name">${esc(name)}</span><br><span class="dc-phone">${esc(phone || "No phone number shared")}</span><span class="dc-use">Tap to use this contact</span></span>
-        ${ic("chevron-right")}
+      const name = contactName(c.name) || "Unnamed contact";
+      const phones = contactPhones(c.tel);
+      const displayPhone = phones[0] ? prettyPhone(phones[0]) : "No phone number shared";
+      const initials = name === "Unnamed contact" ? "?" : name.slice(0,1).toLocaleUpperCase();
+      return `<button type="button" class="device-contact" data-contact-index="${i}" aria-label="Use contact ${esc(name)}">
+        <span class="dc-avatar">${esc(initials)}</span>
+        <span class="dc-details">
+          <span class="dc-name">${esc(name)}</span>
+          <span class="dc-phone">${esc(displayPhone)}</span>
+          ${phones.length > 1 ? `<span class="dc-extra">${phones.length} phone numbers available</span>` : ""}
+        </span>
+        <span class="dc-chevron">${ic("chevron_right")}</span>
       </button>`;
     }).join("");
 
@@ -2015,13 +2040,10 @@ function renderDeviceContacts() {
       if (!selected) return;
       const mobile = normalizeIndianMobile(selected.tel);
       if (!mobile) {
-        status.textContent = "This contact has no valid Indian 10-digit mobile number. Choose another contact or enter the number manually.";
+        status.textContent = "This contact does not have a valid Indian 10-digit mobile number. Choose another contact or enter the number manually.";
         return;
       }
-      window.__pendingDeviceContact = {
-        name: Array.isArray(selected.name) ? (selected.name[0] || "") : (selected.name || ""),
-        mobile
-      };
+      window.__pendingDeviceContact = { name: contactName(selected.name), mobile };
       go(window.__contactReturnRoute || "addcustomer");
     });
   };
@@ -2030,37 +2052,35 @@ function renderDeviceContacts() {
   const openButton = $("#deviceContactOpen");
   openButton.onclick = async () => {
     if (!window.isSecureContext) {
-      status.textContent = "Contacts require a secure HTTPS website. Please open the official My Katha website using its https:// address.";
+      status.textContent = "Contacts require a secure HTTPS website. Open My Katha using its official https:// address.";
       return;
     }
     if (!("contacts" in navigator) || !navigator.contacts || typeof navigator.contacts.select !== "function") {
-      status.textContent = "This browser does not support the phone contact picker. Open My Katha in a supported Chrome browser on Android, or enter the details manually.";
+      status.textContent = "This browser does not support the phone contact chooser. Try the latest Chrome on Android, or enter the details manually.";
       return;
     }
     openButton.disabled = true;
-    openButton.innerHTML = `${ic("progress_activity")} Opening phone contacts…`;
-    status.textContent = "Choose the contact or contacts you want to share, then confirm in your phone's contact chooser.";
+    openButton.innerHTML = `${ic("progress_activity")}<span>Opening phone contacts…</span>`;
+    status.textContent = "Select the contacts you want to share in your phone's contact chooser.";
     try {
-      // Must be called directly from this user tap. The browser opens its native
-      // picker; it does not grant persistent or unrestricted address-book access.
       const chosen = await navigator.contacts.select(["name", "tel"], { multiple: true });
       deviceContactResults = (chosen || []).map(contact => ({
-        name: Array.isArray(contact.name) ? (contact.name[0] || "") : "",
-        tel: Array.isArray(contact.tel) ? contact.tel.filter(Boolean) : []
+        name: contactName(contact.name),
+        tel: contactPhones(contact.tel)
       })).filter(contact => contact.name || contact.tel.length);
       paint();
       status.textContent = deviceContactResults.length
-        ? "Contacts loaded. Tap one contact below to return to Add Customer and fill the form."
-        : "No contacts were shared. Tap the button to choose again.";
+        ? "Contacts loaded. Tap one contact below to fill the Add Customer form."
+        : "No contacts were shared. You can choose again.";
     } catch (error) {
       console.error("My Katha device contact picker:", error);
-      if (error && error.name === "AbortError") status.textContent = "Contact selection cancelled. You can try again whenever you are ready.";
-      else if (error && error.name === "SecurityError") status.textContent = "The browser blocked contact access. Open My Katha directly in a supported browser and tap the button again.";
-      else if (error && error.name === "TypeError") status.textContent = "This browser does not support the requested contact details. Try the latest Chrome on Android.";
+      if (error && error.name === "AbortError") status.textContent = "Contact selection cancelled. You can try again.";
+      else if (error && error.name === "SecurityError") status.textContent = "The browser blocked contact access. Open My Katha directly in a supported browser and try again.";
+      else if (error && error.name === "TypeError") status.textContent = "This browser does not support the requested contact fields. Try the latest Chrome on Android.";
       else status.textContent = "Could not open phone contacts. Check browser support and try again.";
     } finally {
       openButton.disabled = false;
-      openButton.innerHTML = `${ic("contact_phone")} Allow access & choose contact`;
+      openButton.innerHTML = `${ic("contact_phone")}<span>Choose from phone contacts</span>`;
     }
   };
 }
