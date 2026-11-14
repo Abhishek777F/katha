@@ -1968,12 +1968,12 @@ function renderDeviceContacts() {
     </div>
     <div class="card contact-selected-card">
       <div id="deviceContactList"><div class="contact-empty">
-        <div class="contact-empty-icon">${ic("user-round-search", 1)}</div>
+        <div class="contact-empty-icon">${ic("person_search", 1)}</div>
         <strong>No contacts selected yet</strong>
         <span>Tap “Allow access & choose contact” above. Your phone will show its contacts for you to choose from.</span>
       </div></div>
     </div>
-    <div class="contact-privacy"><span class="contact-privacy-icon">${ic("shield-check", 1)}</span><span><strong>Your privacy matters</strong><br>Contacts are not uploaded to Firebase. Only the contact you tap here is copied into the customer form. Your browser asks again each time you open the phone contact chooser.</span></div>
+    <div class="contact-privacy"><span class="contact-privacy-icon">${ic("verified_user", 1)}</span><span><strong>Your privacy matters</strong><br>Contacts are not uploaded to Firebase. Only the contact you tap here is copied into the customer form. Your browser asks again each time you open the phone contact chooser.</span></div>
   </div>`;
 
   const status = $("#deviceContactStatus");
@@ -1994,7 +1994,7 @@ function renderDeviceContacts() {
     $("#deviceContactCount").textContent = deviceContactResults.length + " selected";
     if (!deviceContactResults.length) {
       list.innerHTML = `<div class="contact-empty">
-        <div class="contact-empty-icon">${ic("user-round-search", 1)}</div>
+        <div class="contact-empty-icon">${ic("person_search", 1)}</div>
         <strong>No contacts selected yet</strong>
         <span>Tap “Allow access & choose contact” above to open your phone contacts.</span>
       </div>`;
@@ -2038,7 +2038,7 @@ function renderDeviceContacts() {
       return;
     }
     openButton.disabled = true;
-    openButton.innerHTML = `${ic("loader-circle")} Opening phone contacts…`;
+    openButton.innerHTML = `${ic("progress_activity")} Opening phone contacts…`;
     status.textContent = "Choose the contact or contacts you want to share, then confirm in your phone's contact chooser.";
     try {
       // Must be called directly from this user tap. The browser opens its native
