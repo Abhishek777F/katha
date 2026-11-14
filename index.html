@@ -2961,8 +2961,8 @@ function renderSettings() {
     <div class="lab">Layout density</div>${seg([["comfortable", "Comfortable"], ["compact", "Compact"]], dn, "dn", 2)}
     <div class="lab">Animations</div>${seg([["on", "On"], ["reduced", "Reduced"]], an, "an", 2)}
     <p class="mu" style="margin-top:-4px">Saved on this device and applied instantly.</p></div>
-  <div class="setcard"><h3>Balance reminder notifications</h3>
-    <p class="lab" style="margin-bottom:10px">Receive background push reminders on the 7th, 14th, 21st and 28th of each month when customers have unpaid balances. Customer, product and payment changes never trigger push notifications.</p>
+  <div class="setcard"><h3>Admin push notifications</h3>
+    <p class="lab" style="margin-bottom:10px">Enable push notifications on this browser to receive payment-received alerts and scheduled balance reminders on the 7th, 14th, 21st and 28th of each month when customers have unpaid balances. Keep this browser registered to receive admin alerts.</p>
     <div class="pushstat">${pushOn() ? pill("Enabled on this device", "ok") : pill("Not enabled on this device", "mut")}</div>
     <div class="row2"><button class="btn pushon ${pushOn() ? "sel" : ""}" data-act="enablePush">${ic("notifications_active")} Enable</button>
     <button class="btn pushoff ${pushOn() ? "" : "sel"}" data-act="disablePush">${ic("notifications_off")} Disable</button></div>
