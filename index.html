@@ -1407,7 +1407,7 @@ const S = { user: null, customers: new Map(), onlineCustomers: new Set(), tot: {
 let globalUnsubs = [], pageUnsubs = [], paintQueued = false, idleT = null;
 const ACT = {};   // click-action table (declared early: other code adds to it)
 
-ACT.generatePortalLink = b => lock(b, async () => {
+ACT.whatsappPortalLink = b => lock(b, async () => {
   const id = String(b.dataset.id || "").trim();
   const c = cust(id);
   if (!c || c.deleted) throw new UserError("This active customer could not be found.");
@@ -2242,8 +2242,7 @@ function paintCustomer() {
     ${c.notes ? `<p class="mu sm" style="margin-top:10px">${esc(c.notes)}</p>` : ""}
     ${c.deleted ? "" : `<div class="cdc-actions">
       <button type="button" class="cdc-action" data-act="customerQuickMessage" data-id="${esc(id)}" aria-label="Send message" title="Send message">${ic("chat", 1)}</button>
-      <button type="button" class="cdc-action" data-act="generatePortalLink" data-id="${esc(id)}" aria-label="Generate customer portal link and open WhatsApp" title="Generate portal link in WhatsApp">${ic("link", 1)}</button>
-      <a class="cdc-action wa ${n ? "" : "off"}" ${n ? `target="_blank" rel="noopener" href="https://wa.me/91${n}?text=${encodeURIComponent(waText(c))}"` : ""} aria-label="Chat on WhatsApp" title="WhatsApp">${WA}</a>
+      <button type="button" class="cdc-action wa ${n ? "" : "off"}" data-act="whatsappPortalLink" data-id="${esc(id)}" ${n ? "" : "disabled"} aria-label="Generate customer portal link and open WhatsApp" title="WhatsApp — send account message with portal link">${WA}</button>
     </div>`}</div>
   <div class="grid" style="margin-top:12px">
     <div class="stat" style="text-align:center"><div class="k">Total amount</div><div class="v">${inr(cTotal(c))}</div></div>
