@@ -1364,6 +1364,49 @@ const MY_KATHA_NOTIFICATION_WORKER_URL = "https://my-katha-notifications.abhi831
 // My Katha Customer Portal API (separate from the notification worker).
 const MY_KATHA_PORTAL_API_URL = "https://my-katha-customer-portal.abhi8310815429gxhfjgig.workers.dev";
 
+
+
+async function dispatchCustomerNotification(notificationId) {
+  if (!S.user || typeof S.user.getIdToken !== "function") {
+    throw new Error("Admin session is not available.");
+  }
+  const idToken = await S.user.getIdToken();
+  let result;
+  try {
+    result = await fetch(MY_KATHA_NOTIFICATION_WORKER_URL, {
+      method: "POST",
+      headers: {
+        "Authorization": "Bearer " + idToken,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ notificationId })
+    });
+  } catch (err) {
+    // The browser blocked the call before the worker could answer (almost always a CORS / preflight problem).
+    throw new Error("The browser could not reach the notification worker. The worker must allow this website's address (CORS).");
+  }
+  let data = {};
+  try { data = await result.json(); } catch (_) {}
+  if (!result.ok || !data.success) {
+    throw new Error(data.error || data.status || ("Worker request failed (" + result.status + ")."));
+  }
+  return data;
+}
+
+function requireOnline() {
+  if (!navigator.onLine) throw new UserError("You are offline. Nothing was saved. Money entries are saved only when connected to Firebase – reconnect and try again.");
+}
+async function lock(btn, fn) {
+  if (!btn || btn.dataset.busy) return;
+  const html = btn.innerHTML; btn.dataset.busy = "1"; btn.disabled = true; btn.innerHTML = '<span class="spin s"></span>';
+  try { return await fn(); } finally { delete btn.dataset.busy; btn.disabled = false; btn.innerHTML = html; }
+}
+
+/* ---------- state ---------- */
+const S = { user: null, customers: new Map(), onlineCustomers: new Set(), tot: { gave: 0, got: 0, out: 0, customers: 0, withOut: 0 }, ready: false, unread: 0, recent: [], lastSync: null, err: "", route: null, wait: false };
+let globalUnsubs = [], pageUnsubs = [], paintQueued = false, idleT = null;
+const ACT = {};   // click-action table (declared early: other code adds to it)
+
 ACT.generatePortalLink = b => lock(b, async () => {
   const id = String(b.dataset.id || "").trim();
   const c = cust(id);
@@ -1408,47 +1451,6 @@ ACT.generatePortalLink = b => lock(b, async () => {
     throw error;
   }
 });
-
-async function dispatchCustomerNotification(notificationId) {
-  if (!S.user || typeof S.user.getIdToken !== "function") {
-    throw new Error("Admin session is not available.");
-  }
-  const idToken = await S.user.getIdToken();
-  let result;
-  try {
-    result = await fetch(MY_KATHA_NOTIFICATION_WORKER_URL, {
-      method: "POST",
-      headers: {
-        "Authorization": "Bearer " + idToken,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ notificationId })
-    });
-  } catch (err) {
-    // The browser blocked the call before the worker could answer (almost always a CORS / preflight problem).
-    throw new Error("The browser could not reach the notification worker. The worker must allow this website's address (CORS).");
-  }
-  let data = {};
-  try { data = await result.json(); } catch (_) {}
-  if (!result.ok || !data.success) {
-    throw new Error(data.error || data.status || ("Worker request failed (" + result.status + ")."));
-  }
-  return data;
-}
-
-function requireOnline() {
-  if (!navigator.onLine) throw new UserError("You are offline. Nothing was saved. Money entries are saved only when connected to Firebase – reconnect and try again.");
-}
-async function lock(btn, fn) {
-  if (!btn || btn.dataset.busy) return;
-  const html = btn.innerHTML; btn.dataset.busy = "1"; btn.disabled = true; btn.innerHTML = '<span class="spin s"></span>';
-  try { return await fn(); } finally { delete btn.dataset.busy; btn.disabled = false; btn.innerHTML = html; }
-}
-
-/* ---------- state ---------- */
-const S = { user: null, customers: new Map(), onlineCustomers: new Set(), tot: { gave: 0, got: 0, out: 0, customers: 0, withOut: 0 }, ready: false, unread: 0, recent: [], lastSync: null, err: "", route: null, wait: false };
-let globalUnsubs = [], pageUnsubs = [], paintQueued = false, idleT = null;
-const ACT = {};   // click-action table (declared early: other code adds to it)
 const ready = () => S.ready;
 document.head.insertAdjacentHTML("beforeend", `<style>
 .customer-avatar-wrap{position:relative;display:block;flex:none}
