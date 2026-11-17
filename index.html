@@ -1361,6 +1361,54 @@ function toast(msg, type = "") {
 }
 const MY_KATHA_NOTIFICATION_WORKER_URL = "https://my-katha-notifications.abhi8310815429gxhfjgig.workers.dev/";
 
+// My Katha Customer Portal API (separate from the notification worker).
+const MY_KATHA_PORTAL_API_URL = "https://my-katha-customer-portal.abhi8310815429gxhfjgig.workers.dev";
+
+ACT.generatePortalLink = b => lock(b, async () => {
+  const id = String(b.dataset.id || "").trim();
+  const c = cust(id);
+  if (!c || c.deleted) throw new UserError("This active customer could not be found.");
+  const mobile = phoneParts(c.mobile);
+  if (!mobile) throw new UserError("Add a valid 10-digit Indian mobile number to this customer before sending a WhatsApp portal link.");
+  if (!S.user || typeof S.user.getIdToken !== "function") throw new UserError("Admin session is not available. Sign in again.");
+
+  // Open WhatsApp during the click gesture so mobile browsers do not block it.
+  const waWindow = window.open("about:blank", "_blank");
+  if (!waWindow) throw new UserError("WhatsApp could not be opened. Allow pop-ups for the My Katha admin website and try again.");
+  try {
+    requireOnline();
+    const idToken = await S.user.getIdToken();
+    const response = await fetch(MY_KATHA_PORTAL_API_URL + "/admin/create-link", {
+      method: "POST",
+      headers: { "Authorization": "Bearer " + idToken, "Content-Type": "application/json" },
+      body: JSON.stringify({ customerId: id, expiresInDays: 90 })
+    });
+    let result = {};
+    try { result = await response.json(); } catch (_) {}
+    if (!response.ok || !result.link) throw new UserError(result.error || ("Portal link creation failed (" + response.status + ")."));
+    const expiry = new Date(result.expiresAt).toLocaleDateString("en-IN", { timeZone: TZ, day: "2-digit", month: "short", year: "numeric" });
+    const message = [
+      "Hello " + c.name + ",",
+      "",
+      "Your personal My Katha customer portal is ready.",
+      "Open your secure portal here:",
+      result.link,
+      "",
+      "You can view your account details, borrowed products and payment history.",
+      "This personal link expires on " + expiry + ". Please do not share it with anyone.",
+      "",
+      "Regards,",
+      adminName(),
+      "Balappa Provision Store"
+    ].join("\n");
+    waWindow.location.href = "https://wa.me/91" + mobile + "?text=" + encodeURIComponent(message);
+    toast("Secure portal link generated. Review and send the WhatsApp message.", "ok");
+  } catch (error) {
+    try { waWindow.close(); } catch (_) {}
+    throw error;
+  }
+});
+
 async function dispatchCustomerNotification(notificationId) {
   if (!S.user || typeof S.user.getIdToken !== "function") {
     throw new Error("Admin session is not available.");
@@ -2192,6 +2240,7 @@ function paintCustomer() {
     ${c.notes ? `<p class="mu sm" style="margin-top:10px">${esc(c.notes)}</p>` : ""}
     ${c.deleted ? "" : `<div class="cdc-actions">
       <button type="button" class="cdc-action" data-act="customerQuickMessage" data-id="${esc(id)}" aria-label="Send message" title="Send message">${ic("chat", 1)}</button>
+      <button type="button" class="cdc-action" data-act="generatePortalLink" data-id="${esc(id)}" aria-label="Generate customer portal link and open WhatsApp" title="Generate portal link in WhatsApp">${ic("link", 1)}</button>
       <a class="cdc-action wa ${n ? "" : "off"}" ${n ? `target="_blank" rel="noopener" href="https://wa.me/91${n}?text=${encodeURIComponent(waText(c))}"` : ""} aria-label="Chat on WhatsApp" title="WhatsApp">${WA}</a>
     </div>`}</div>
   <div class="grid" style="margin-top:12px">
