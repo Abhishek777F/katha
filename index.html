@@ -1431,18 +1431,13 @@ ACT.whatsappPortalLink = b => lock(b, async () => {
     if (!response.ok || !result.link) throw new UserError(result.error || ("Portal link creation failed (" + response.status + ")."));
     const expiry = new Date(result.expiresAt).toLocaleDateString("en-IN", { timeZone: TZ, day: "2-digit", month: "short", year: "numeric" });
     const message = [
-      "Hello " + c.name + ",",
+      waText(c),
       "",
-      "Your personal My Katha customer portal is ready.",
-      "Open your secure portal here:",
+      "*Your personal My Katha customer portal*",
+      "View your account details, borrowed products and payment history:",
       result.link,
       "",
-      "You can view your account details, borrowed products and payment history.",
-      "This personal link expires on " + expiry + ". Please do not share it with anyone.",
-      "",
-      "Regards,",
-      adminName(),
-      "Balappa Provision Store"
+      "This secure personal link expires on " + expiry + ". Please do not share it with anyone."
     ].join("\n");
     waWindow.location.href = "https://wa.me/91" + mobile + "?text=" + encodeURIComponent(message);
     toast("Secure portal link generated. Review and send the WhatsApp message.", "ok");
