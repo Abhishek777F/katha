@@ -1420,7 +1420,7 @@ ACT.generatePortalLink = b => lock(b, async () => {
   if (!waWindow) throw new UserError("WhatsApp could not be opened. Allow pop-ups for the My Katha admin website and try again.");
   try {
     requireOnline();
-    const idToken = await S.user.getIdToken();
+    const idToken = await S.user.getIdToken(true); // Force-refresh the Firebase ID token before server-side verification.
     const response = await fetch(MY_KATHA_PORTAL_API_URL + "/admin/create-link", {
       method: "POST",
       headers: { "Authorization": "Bearer " + idToken, "Content-Type": "application/json" },
